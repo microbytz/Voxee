@@ -33,35 +33,10 @@ const answerQuestionFromWebFlow = ai.defineFlow(
   async input => {
     const llmResponse = await ai.generate({
       model: 'googleai/gemini-1.5-pro-latest',
-      prompt: `You are an AI assistant that answers questions based on web search results.
+      prompt: `You are a helpful AI assistant. Answer the following question. If you need to search the web to answer, do so.
 
-      Use the googleSearch tool to find relevant information to answer the question.
-    
       Question: ${input.question}
-    
-      If you cannot find the answer using the search results, respond that you don't know.
       `,
-      tools: ['googleSearch'],
-      config: {
-        safetySettings: [
-          {
-            category: 'HARM_CATEGORY_HATE_SPEECH',
-            threshold: 'BLOCK_ONLY_HIGH',
-          },
-          {
-            category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-            threshold: 'BLOCK_NONE',
-          },
-          {
-            category: 'HARM_CATEGORY_HARASSMENT',
-            threshold: 'BLOCK_MEDIUM_AND_ABOVE',
-          },
-          {
-            category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-            threshold: 'BLOCK_LOW_AND_ABOVE',
-          },
-        ],
-      }
     });
 
     return {
