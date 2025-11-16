@@ -50,7 +50,7 @@ export function ChatContainer() {
         setMessages(prev => [...prev, userMessage]);
         setIsAiTyping(true);
 
-        const aiResponse = await handleUserRequest({ message, fileDataUri });
+        const aiResponse = await handleUserRequest({ message, fileDataUri, settings });
 
         const aiMessage: Message = {
             id: (Date.now() + 1).toString(),
@@ -64,7 +64,7 @@ export function ChatContainer() {
         if (settings.autoSpeak && aiResponse.type === 'text' && aiResponse.content) {
             speak(aiResponse.content);
         }
-    }, [settings.autoSpeak, speak]);
+    }, [settings, speak]);
 
 
     return (

@@ -12,6 +12,9 @@ import {z} from 'genkit';
 
 const AnswerQuestionFromWebInputSchema = z.object({
   question: z.string().describe('The question to answer using web search.'),
+  personality: z.string().describe('The personality the AI should adopt.').optional(),
+  verbosity: z.string().describe('How concise or verbose the answer should be.').optional(),
+  style: z.string().describe('The writing style the AI should use.').optional(),
 });
 export type AnswerQuestionFromWebInput = z.infer<typeof AnswerQuestionFromWebInputSchema>;
 
@@ -35,6 +38,10 @@ const answerQuestionFromWebFlow = ai.defineFlow(
       model: 'googleai/gemini-1.5-pro-latest',
       prompt: `You are a helpful AI assistant. Answer the following question. If you need to search the web to answer, do so.
 
+      Your personality should be: ${input.personality || 'default'}.
+      Your verbosity should be: ${input.verbosity || 'default'}.
+      Your writing style should be: ${input.style || 'casual'}.
+      
       Question: ${input.question}
       `,
     });

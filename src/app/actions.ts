@@ -4,11 +4,12 @@ import { answerQuestionFromWeb } from "@/ai/flows/answer-question-from-web";
 import { generateCode } from "@/ai/flows/generate-code-from-description";
 import { generateImageFromDescription } from "@/ai/flows/generate-image-from-description";
 import { summarizeUploadedDocument } from "@/ai/flows/summarize-uploaded-document";
-import type { AiResponse } from "@/lib/types";
+import type { AiResponse, Settings } from "@/lib/types";
 
 interface HandleUserRequestInput {
   message: string;
   fileDataUri?: string;
+  settings: Settings;
 }
 
 export async function handleUserRequest(input: HandleUserRequestInput): Promise<AiResponse> {
@@ -50,7 +51,12 @@ export async function handleUserRequest(input: HandleUserRequestInput): Promise<
       };
     }
 
-    const result = await answerQuestionFromWeb({ question: input.message });
+    const result = await answerQuestionFromWeb({ 
+      question: input.message,
+      personality: input.settings.personality,
+      verbosity: input.settings.verbosity,
+      style: input.settings.style,
+     });
     return {
       type: 'text',
       content: result.answer,
