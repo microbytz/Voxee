@@ -24,36 +24,20 @@ export async function answerQuestionFromWeb(input: AnswerQuestionFromWebInput): 
   return answerQuestionFromWebFlow(input);
 }
 
-const searchWeb = ai.defineTool(
-  {
-    name: 'searchWeb',
-    description: 'Searches the web for the given query and returns the results.',
-    inputSchema: z.object({
-      query: z.string().describe('The search query.'),
-    }),
-    outputSchema: z.string(),
-  },
-  async input => {
-    // This is a placeholder implementation. Replace with actual web search.
-    // In a real application, you would use a search API like Google Search.
-    // For this example, we'll just return a canned response.
-    return `Search results for ${input.query}: This is a simulated search result.  Please replace with actual search implementation!`;
-  }
-);
-
 const answerQuestionFromWebPrompt = ai.definePrompt({
   name: 'answerQuestionFromWebPrompt',
   input: {schema: AnswerQuestionFromWebInputSchema},
   output: {schema: AnswerQuestionFromWebOutputSchema},
-  tools: [searchWeb],
+  tools: ['googleSearch'],
   prompt: `You are an AI assistant that answers questions based on web search results.
 
-  Use the searchWeb tool to find relevant information to answer the question.
+  Use the googleSearch tool to find relevant information to answer the question.
 
   Question: {{{question}}}
 
   If you cannot find the answer using the search results, respond that you don't know.
-  `, config: {
+  `, 
+  config: {
     safetySettings: [
       {
         category: 'HARM_CATEGORY_HATE_SPEECH',
@@ -82,7 +66,9 @@ const answerQuestionFromWebFlow = ai.defineFlow(
     outputSchema: AnswerQuestionFromWebOutputSchema,
   },
   async input => {
-    const {output} = await answerQuestionFromWebPrompt(input);
+    const {output} = await answerQuestionFromWebPrompt(input, {
+        model: 'googleai/gemini-1.5-pro-latest'
+    });
     return output!;
   }
 );
