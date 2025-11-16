@@ -24,41 +24,6 @@ export async function answerQuestionFromWeb(input: AnswerQuestionFromWebInput): 
   return answerQuestionFromWebFlow(input);
 }
 
-const answerQuestionFromWebPrompt = ai.definePrompt({
-  name: 'answerQuestionFromWebPrompt',
-  input: {schema: AnswerQuestionFromWebInputSchema},
-  output: {schema: AnswerQuestionFromWebOutputSchema},
-  tools: ['googleSearch'],
-  prompt: `You are an AI assistant that answers questions based on web search results.
-
-  Use the googleSearch tool to find relevant information to answer the question.
-
-  Question: {{{question}}}
-
-  If you cannot find the answer using the search results, respond that you don't know.
-  `, 
-  config: {
-    safetySettings: [
-      {
-        category: 'HARM_CATEGORY_HATE_SPEECH',
-        threshold: 'BLOCK_ONLY_HIGH',
-      },
-      {
-        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-        threshold: 'BLOCK_NONE',
-      },
-      {
-        category: 'HARM_CATEGORY_HARASSMENT',
-        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
-      },
-      {
-        category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-        threshold: 'BLOCK_LOW_AND_ABOVE',
-      },
-    ],
-  }
-});
-
 const answerQuestionFromWebFlow = ai.defineFlow(
   {
     name: 'answerQuestionFromWebFlow',
@@ -66,9 +31,41 @@ const answerQuestionFromWebFlow = ai.defineFlow(
     outputSchema: AnswerQuestionFromWebOutputSchema,
   },
   async input => {
-    const {output} = await answerQuestionFromWebPrompt(input, {
-        model: 'googleai/gemini-1.5-pro-latest'
+    const llmResponse = await ai.generate({
+      model: 'googleai/gemini-1.5-pro-latest',
+      prompt: `You are an AI assistant that answers questions based on web search results.
+
+      Use the googleSearch tool to find relevant information to answer the question.
+    
+      Question: ${input.question}
+    
+      If you cannot find the answer using the search results, respond that you don't know.
+      `,
+      tools: ['googleSearch'],
+      config: {
+        safetySettings: [
+          {
+            category: 'HARM_CATEGORY_HATE_SPEECH',
+            threshold: 'BLOCK_ONLY_HIGH',
+          },
+          {
+            category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+            threshold: 'BLOCK_NONE',
+          },
+          {
+            category: 'HARM_CATEGORY_HARASSMENT',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+          },
+          {
+            category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+            threshold: 'BLOCK_LOW_AND_ABOVE',
+          },
+        ],
+      }
     });
-    return output!;
+
+    return {
+      answer: llmResponse.text,
+    };
   }
 );
