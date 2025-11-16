@@ -22,6 +22,11 @@ export function ChatInput({ onSubmit, speech }: ChatInputProps) {
 
     const { isListening, transcript, startListening, stopListening, setTranscript, supported: speechSupported } = speech;
 
+    const [isClient, setIsClient] = useState(false);
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
     useEffect(() => {
         if (transcript) {
             setInputValue(prev => prev ? `${prev} ${transcript}` : transcript);
@@ -99,7 +104,7 @@ export function ChatInput({ onSubmit, speech }: ChatInputProps) {
                 </Button>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
 
-                {speechSupported && (
+                {isClient && speechSupported && (
                     <Button type="button" variant={isListening ? "destructive" : "ghost"} size="icon" onClick={handleMicToggle} disabled={isSubmitting}>
                         {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                         <span className="sr-only">{isListening ? 'Stop listening' : 'Start listening'}</span>
