@@ -118,6 +118,14 @@ export function SettingsPanel({
                         <div className="flex items-center space-x-2"><RadioGroupItem value="verbose" id="v-verbose" /><Label htmlFor="v-verbose">Verbose</Label></div>
                       </RadioGroup>
                     </div>
+                    <div className="grid gap-2">
+                      <Label>Style</Label>
+                       <RadioGroup value={settings.style} onValueChange={(v) => handleSettingChange('style', v as AiStyle)} className="flex gap-4">
+                        <div className="flex items-center space-x-2"><RadioGroupItem value="casual" id="s-casual" /><Label htmlFor="s-casual">Casual</Label></div>
+                        <div className="flex items-center space-x-2"><RadioGroupItem value="formal" id="s-formal" /><Label htmlFor="s-formal">Formal</Label></div>
+                        <div className="flex items-center space-x-2"><RadioGroupItem value="humorous" id="s-humorous" /><Label htmlFor="s-humorous">Humorous</Label></div>
+                      </RadioGroup>
+                    </div>
                 </div>
             </SheetContent>
         </Sheet>
