@@ -8,7 +8,8 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z, googleSearch} from 'genkit';
+import {z} from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 
 const AnswerQuestionFromWebInputSchema = z.object({
   question: z.string().describe('The question to answer using web search.'),
@@ -31,7 +32,7 @@ const answerQuestionPrompt = ai.definePrompt({
   name: 'answerQuestionPrompt',
   input: {schema: AnswerQuestionFromWebInputSchema},
   output: {schema: AnswerQuestionFromWebOutputSchema},
-  tools: [googleSearch],
+  tools: [googleAI.googleSearch],
   prompt: `You are a helpful AI assistant. Your responses should be grounded in search results when possible.
   
   Your personality should be: {{{personality}}}
