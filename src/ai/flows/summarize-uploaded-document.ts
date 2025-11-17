@@ -4,6 +4,9 @@
  *
  * - summarizeUploadedDocument - A function that handles the summarization of the uploaded document.
  */
+import { config } from 'dotenv';
+config();
+
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 import {z} from 'genkit';

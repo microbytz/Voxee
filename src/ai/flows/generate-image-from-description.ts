@@ -5,6 +5,9 @@
  *
  * - generateImageFromDescription - A function that generates an image based on a text description.
  */
+import { config } from 'dotenv';
+config();
+
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 import {z} from 'genkit';
