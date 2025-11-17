@@ -5,10 +5,15 @@
  * - answerQuestion - A function that handles the question answering process.
  */
 import 'dotenv/config';
-import { ai } from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 import { z } from 'genkit';
 import type { AnswerQuestionInput, AnswerQuestionOutput } from '@/lib/types';
 
+const ai = genkit({
+  plugins: [googleAI()],
+  model: 'googleai/gemini-1.5-flash-latest',
+});
 
 const AnswerQuestionInputSchema = z.object({
   question: z.string().describe('The question to answer.'),

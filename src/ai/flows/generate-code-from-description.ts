@@ -7,10 +7,15 @@
  *
  * @function generateCode - The main function that triggers the code generation flow.
  */
-
-import {ai} from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 import {z} from 'genkit';
 import type { GenerateCodeInput, GenerateCodeOutput } from '@/lib/types';
+
+const ai = genkit({
+  plugins: [googleAI()],
+  model: 'googleai/gemini-1.5-flash-latest',
+});
 
 const GenerateCodeInputSchema = z.object({
   description: z

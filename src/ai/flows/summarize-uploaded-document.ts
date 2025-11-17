@@ -4,11 +4,15 @@
  *
  * - summarizeUploadedDocument - A function that handles the summarization of the uploaded document.
  */
-
-import {ai} from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 import {z} from 'genkit';
 import type { SummarizeUploadedDocumentInput, SummarizeUploadedDocumentOutput } from '@/lib/types';
 
+const ai = genkit({
+  plugins: [googleAI()],
+  model: 'googleai/gemini-1.5-flash-latest',
+});
 
 const SummarizeUploadedDocumentInputSchema = z.object({
   documentDataUri: z

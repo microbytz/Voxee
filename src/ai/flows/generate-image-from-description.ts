@@ -5,10 +5,15 @@
  *
  * - generateImageFromDescription - A function that generates an image based on a text description.
  */
-
-import {ai} from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 import {z} from 'genkit';
 import type { GenerateImageFromDescriptionInput, GenerateImageFromDescriptionOutput } from '@/lib/types';
+
+const ai = genkit({
+  plugins: [googleAI()],
+  model: 'googleai/gemini-1.5-flash-latest',
+});
 
 const GenerateImageFromDescriptionInputSchema = z.object({
   imageDescription: z
