@@ -56,7 +56,7 @@ export async function handleUserRequest(input: HandleUserRequestInput): Promise<
       personality: input.settings.personality || 'default',
       verbosity: input.settings.verbosity || 'default',
       style: input.settings.style || 'casual',
-    } as AnswerQuestionInput);
+    });
     return {
       type: 'text',
       content: result.answer,

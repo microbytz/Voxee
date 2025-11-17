@@ -7,9 +7,13 @@
  * - GenerateImageFromDescriptionInput - The input type for the generateImageFromDescription function.
  * - GenerateImageFromDescriptionOutput - The return type for the generateImageFromDescription function.
  */
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
+import { z } from 'genkit';
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+const ai = genkit({
+  plugins: [googleAI()],
+});
 
 const GenerateImageFromDescriptionInputSchema = z.object({
   imageDescription: z
@@ -24,7 +28,7 @@ const GenerateImageFromDescriptionOutputSchema = z.object({
   image: z
     .string()
     .describe(
-      'The generated image as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.' 
+      'The generated image as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'
     ),
   progress: z.string().describe('Short summary of what has been generated.')
 });

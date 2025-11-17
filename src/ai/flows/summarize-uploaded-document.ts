@@ -6,9 +6,13 @@
  * - SummarizeUploadedDocumentInput - The input type for the summarizeUploadedDocument function.
  * - SummarizeUploadedDocumentOutput - The return type for the summarizeUploadedDocument function.
  */
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
+import { z } from 'genkit';
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+const ai = genkit({
+  plugins: [googleAI()],
+});
 
 const SummarizeUploadedDocumentInputSchema = z.object({
   documentDataUri: z

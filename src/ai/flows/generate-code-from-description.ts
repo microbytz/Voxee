@@ -9,9 +9,13 @@
  * @interface GenerateCodeOutput - The output type for the generateCode function.
  * @function generateCode - The main function that triggers the code generation flow.
  */
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
+import { z } from 'genkit';
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+const ai = genkit({
+  plugins: [googleAI()],
+});
 
 const GenerateCodeInputSchema = z.object({
   description: z

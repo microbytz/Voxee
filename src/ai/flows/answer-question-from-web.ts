@@ -4,17 +4,32 @@
  *
  * - answerQuestion - A function that handles the question answering process.
  */
-
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import 'dotenv/config';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
+import { z } from 'genkit';
 import type { AnswerQuestionInput, AnswerQuestionOutput } from '@/lib/types';
 
+// Initialize Genkit and the Google AI plugin within the server action file
+const ai = genkit({
+  plugins: [googleAI()],
+  model: 'googleai/gemini-1.5-flash-latest',
+});
 
 const AnswerQuestionInputSchema = z.object({
   question: z.string().describe('The question to answer.'),
-  personality: z.string().describe('The personality the AI should adopt.').optional(),
-  verbosity: z.string().describe('How concise or verbose the answer should be.').optional(),
-  style: z.string().describe('The writing style the AI should use.').optional(),
+  personality: z
+    .string()
+    .describe('The personality the AI should adopt.')
+    .optional(),
+  verbosity: z
+    .string()
+    .describe('How concise or verbose the answer should be.')
+    .optional(),
+  style: z
+    .string()
+    .describe('The writing style the AI should use.')
+    .optional(),
 });
 
 const AnswerQuestionOutputSchema = z.object({
@@ -23,8 +38,8 @@ const AnswerQuestionOutputSchema = z.object({
 
 const answerQuestionPrompt = ai.definePrompt({
   name: 'answerQuestionPrompt',
-  input: {schema: AnswerQuestionInputSchema},
-  output: {schema: AnswerQuestionOutputSchema},
+  input: { schema: AnswerQuestionInputSchema },
+  output: { schema: AnswerQuestionOutputSchema },
   prompt: `You are a helpful AI assistant.
   
   Your personality should be: {{{personality}}}
@@ -39,22 +54,23 @@ const answerQuestionPrompt = ai.definePrompt({
   `,
 });
 
-
-export async function answerQuestion(input: AnswerQuestionInput): Promise<AnswerQuestionOutput> {
-  return answerQuestionFlow(input);
-}
-
 const answerQuestionFlow = ai.defineFlow(
   {
     name: 'answerQuestionFlow',
     inputSchema: AnswerQuestionInputSchema,
     outputSchema: AnswerQuestionOutputSchema,
   },
-  async input => {
-    const {output} = await answerQuestionPrompt(input);
+  async (input) => {
+    const { output } = await answerQuestionPrompt(input);
     if (!output) {
-      throw new Error("The AI model failed to produce a valid response.");
+      throw new Error('The AI model failed to produce a valid response.');
     }
     return output;
   }
 );
+
+export async function answerQuestion(
+  input: AnswerQuestionInput
+): Promise<AnswerQuestionOutput> {
+  return answerQuestionFlow(input);
+}
