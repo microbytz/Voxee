@@ -63,16 +63,16 @@ export async function handleUserRequest(input: HandleUserRequestInput): Promise<
     };
   } catch (error) {
     console.error("AI action failed:", error);
-    const errorMessage = (error as Error).message || "Unknown error";
+    const errorMessage = (error as Error).message || "An unknown error occurred.";
 
-    let userFriendlyMessage = "I'm sorry, I encountered an error while processing your request. Please try again.";
+    let userFriendlyMessage = `An error occurred: ${errorMessage}`;
 
     if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit')) {
-      userFriendlyMessage = "It looks like I'm receiving too many requests right now. Please wait a moment before trying again.";
-    } else if (errorMessage.toLowerCase().includes('api key')) {
-      userFriendlyMessage = "There seems to be an issue with the API key configuration. Please check if the GEMINI_API_KEY is set correctly.";
+      userFriendlyMessage = "Error: Too many requests. You may have hit your API rate limit. Please check your API key and billing status.";
+    } else if (errorMessage.toLowerCase().includes('api key') || errorMessage.toLowerCase().includes('permissiondenied')) {
+      userFriendlyMessage = "Error: Authentication failed. Please make sure your GEMINI_API_KEY is set correctly in the .env file and is valid.";
     } else if (errorMessage.toLowerCase().includes('flow failed')) {
-        userFriendlyMessage = "I'm having trouble getting a valid response from the AI model. This might be a temporary issue. Please try rephrasing your message or try again in a bit."
+        userFriendlyMessage = `Flow execution failed. This can happen if the AI model does not return a valid response. Raw error: ${errorMessage}`;
     }
 
     return {
