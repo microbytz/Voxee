@@ -7,9 +7,8 @@
  * - AnswerQuestionFromWebOutput - The return type for the answerQuestionFromWeb function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai, googleAI} from '@/ai/genkit';
 import {z} from 'genkit';
-import { googleAI } from '@genkit-ai/google-genai';
 
 const AnswerQuestionFromWebInputSchema = z.object({
   question: z.string().describe('The question to answer using web search.'),
