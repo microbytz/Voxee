@@ -28,7 +28,9 @@ export type AiResponse = {
   error?: string;
 }
 
-// These types are used by client components and must be defined in a client-safe file.
+// These types are derived from the Zod schemas in the flow files.
+// Keeping them here allows client components to be aware of the data shape
+// without needing to import server-only code.
 export interface AnswerQuestionInput {
   question: string;
   personality?: string;
@@ -38,4 +40,30 @@ export interface AnswerQuestionInput {
 
 export interface AnswerQuestionOutput {
   answer: string;
+}
+
+export interface GenerateCodeInput {
+  description: string;
+  language: string;
+}
+
+export interface GenerateCodeOutput {
+  code: string;
+}
+
+export interface GenerateImageFromDescriptionInput {
+  imageDescription: string;
+}
+
+export interface GenerateImageFromDescriptionOutput {
+  image: string;
+  progress: string;
+}
+
+export interface SummarizeUploadedDocumentInput {
+  documentDataUri: string;
+}
+
+export interface SummarizeUploadedDocumentOutput {
+  summary: string;
 }

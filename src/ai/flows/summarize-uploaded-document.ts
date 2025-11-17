@@ -3,16 +3,12 @@
  * @fileOverview Summarizes an uploaded document.
  *
  * - summarizeUploadedDocument - A function that handles the summarization of the uploaded document.
- * - SummarizeUploadedDocumentInput - The input type for the summarizeUploadedDocument function.
- * - SummarizeUploadedDocumentOutput - The return type for the summarizeUploadedDocument function.
  */
-import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/google-genai';
-import { z } from 'genkit';
 
-const ai = genkit({
-  plugins: [googleAI()],
-});
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+import type { SummarizeUploadedDocumentInput, SummarizeUploadedDocumentOutput } from '@/lib/types';
+
 
 const SummarizeUploadedDocumentInputSchema = z.object({
   documentDataUri: z
@@ -21,12 +17,10 @@ const SummarizeUploadedDocumentInputSchema = z.object({
       "The document as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
 });
-export type SummarizeUploadedDocumentInput = z.infer<typeof SummarizeUploadedDocumentInputSchema>;
 
 const SummarizeUploadedDocumentOutputSchema = z.object({
   summary: z.string().describe('A concise summary of the document content.'),
 });
-export type SummarizeUploadedDocumentOutput = z.infer<typeof SummarizeUploadedDocumentOutputSchema>;
 
 export async function summarizeUploadedDocument(
   input: SummarizeUploadedDocumentInput

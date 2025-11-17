@@ -5,17 +5,12 @@
  * The flow takes a description of a function or code snippet and a programming language as input,
  * and generates the corresponding code.
  *
- * @interface GenerateCodeInput - The input type for the generateCode function.
- * @interface GenerateCodeOutput - The output type for the generateCode function.
  * @function generateCode - The main function that triggers the code generation flow.
  */
-import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/google-genai';
-import { z } from 'genkit';
 
-const ai = genkit({
-  plugins: [googleAI()],
-});
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+import type { GenerateCodeInput, GenerateCodeOutput } from '@/lib/types';
 
 const GenerateCodeInputSchema = z.object({
   description: z
@@ -25,14 +20,12 @@ const GenerateCodeInputSchema = z.object({
     .string()
     .describe('The programming language in which to generate the code.'),
 });
-export type GenerateCodeInput = z.infer<typeof GenerateCodeInputSchema>;
 
 const GenerateCodeOutputSchema = z.object({
   code: z
     .string()
     .describe('The generated code snippet in the specified programming language.'),
 });
-export type GenerateCodeOutput = z.infer<typeof GenerateCodeOutputSchema>;
 
 export async function generateCode(input: GenerateCodeInput): Promise<GenerateCodeOutput> {
   return generateCodeFlow(input);

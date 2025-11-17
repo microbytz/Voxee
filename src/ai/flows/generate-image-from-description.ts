@@ -4,37 +4,26 @@
  * @fileOverview Image generation flow from a text description.
  *
  * - generateImageFromDescription - A function that generates an image based on a text description.
- * - GenerateImageFromDescriptionInput - The input type for the generateImageFromDescription function.
- * - GenerateImageFromDescriptionOutput - The return type for the generateImageFromDescription function.
  */
-import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/google-genai';
-import { z } from 'genkit';
 
-const ai = genkit({
-  plugins: [googleAI()],
-});
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+import type { GenerateImageFromDescriptionInput, GenerateImageFromDescriptionOutput } from '@/lib/types';
 
 const GenerateImageFromDescriptionInputSchema = z.object({
   imageDescription: z
     .string()
     .describe('The description of the image to generate.'),
 });
-export type GenerateImageFromDescriptionInput = z.infer<
-  typeof GenerateImageFromDescriptionInputSchema
->;
 
 const GenerateImageFromDescriptionOutputSchema = z.object({
   image: z
     .string()
     .describe(
-      'The generated image as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.'
+      'The generated image as a data URI that must include a MIME type and use Base64 encoding. Expected format: \'data:<mimetype>;base64,<encoded_data>\'.' 
     ),
   progress: z.string().describe('Short summary of what has been generated.')
 });
-export type GenerateImageFromDescriptionOutput = z.infer<
-  typeof GenerateImageFromDescriptionOutputSchema
->;
 
 export async function generateImageFromDescription(
   input: GenerateImageFromDescriptionInput
