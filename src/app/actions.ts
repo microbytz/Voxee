@@ -1,11 +1,11 @@
 "use server";
 
-import { answerQuestionFromWeb } from "@/ai/flows/answer-question-from-web";
+import { answerQuestion } from "@/ai/flows/answer-question-from-web";
 import { generateCode } from "@/ai/flows/generate-code-from-description";
 import { generateImageFromDescription } from "@/ai/flows/generate-image-from-description";
 import { summarizeUploadedDocument } from "@/ai/flows/summarize-uploaded-document";
 import type { AiResponse, Settings } from "@/lib/types";
-import type { AnswerQuestionFromWebInput } from "@/ai/genkit";
+import type { AnswerQuestionInput } from "@/ai/genkit";
 
 interface HandleUserRequestInput {
   message: string;
@@ -52,12 +52,12 @@ export async function handleUserRequest(input: HandleUserRequestInput): Promise<
       };
     }
 
-    const result = await answerQuestionFromWeb({
+    const result = await answerQuestion({
       question: input.message,
       personality: input.settings.personality || 'default',
       verbosity: input.settings.verbosity || 'default',
       style: input.settings.style || 'casual',
-    } as AnswerQuestionFromWebInput);
+    } as AnswerQuestionInput);
     return {
       type: 'text',
       content: result.answer,

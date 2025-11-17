@@ -1,24 +1,22 @@
 'use server';
 /**
- * @fileOverview This file defines a Genkit flow for answering questions based on real-time information retrieved from the web.
+ * @fileOverview This file defines a Genkit flow for answering questions.
  *
- * - answerQuestionFromWeb - A function that handles the question answering process using web search.
- * - AnswerQuestionFromWebInput - The input type for the answerQuestionFromWeb function.
- * - AnswerQuestionFromWebOutput - The return type for the answerQuestionFromWeb function.
+ * - answerQuestion - A function that handles the question answering process.
  */
 
-import {ai, answerQuestionPrompt, AnswerQuestionFromWebInput, AnswerQuestionFromWebOutput, AnswerQuestionFromWebInputSchema, AnswerQuestionFromWebOutputSchema} from '@/ai/genkit';
+import {ai, answerQuestionPrompt, type AnswerQuestionInput, type AnswerQuestionOutput} from '@/ai/genkit';
 
 
-export async function answerQuestionFromWeb(input: AnswerQuestionFromWebInput): Promise<AnswerQuestionFromWebOutput> {
-  return answerQuestionFromWebFlow(input);
+export async function answerQuestion(input: AnswerQuestionInput): Promise<AnswerQuestionOutput> {
+  return answerQuestionFlow(input);
 }
 
-const answerQuestionFromWebFlow = ai.defineFlow(
+const answerQuestionFlow = ai.defineFlow(
   {
-    name: 'answerQuestionFromWebFlow',
-    inputSchema: AnswerQuestionFromWebInputSchema,
-    outputSchema: AnswerQuestionFromWebOutputSchema,
+    name: 'answerQuestionFlow',
+    inputSchema: AnswerQuestionInput,
+    outputSchema: AnswerQuestionOutput,
   },
   async input => {
     const {output} = await answerQuestionPrompt(input);
