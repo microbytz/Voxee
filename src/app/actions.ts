@@ -53,9 +53,9 @@ export async function handleUserRequest(input: HandleUserRequestInput): Promise<
 
     const result = await answerQuestionFromWeb({ 
       question: input.message,
-      personality: input.settings.personality,
-      verbosity: input.settings.verbosity,
-      style: input.settings.style,
+      personality: input.settings.personality || 'default',
+      verbosity: input.settings.verbosity || 'default',
+      style: input.settings.style || 'casual',
      });
     return {
       type: 'text',
