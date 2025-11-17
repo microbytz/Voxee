@@ -31,7 +31,7 @@ const answerQuestionPrompt = ai.definePrompt({
   name: 'answerQuestionPrompt',
   input: {schema: AnswerQuestionFromWebInputSchema},
   output: {schema: AnswerQuestionFromWebOutputSchema},
-  prompt: `You are a helpful AI assistant. 
+  prompt: `You are a helpful AI assistant. Your responses should be grounded in search results when possible.
   
   Your personality should be: {{{personality}}}
   Your verbosity should be: {{{verbosity}}}
