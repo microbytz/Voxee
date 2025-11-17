@@ -27,6 +27,23 @@ export async function answerQuestionFromWeb(input: AnswerQuestionFromWebInput): 
   return answerQuestionFromWebFlow(input);
 }
 
+const answerQuestionPrompt = ai.definePrompt({
+  name: 'answerQuestionPrompt',
+  input: {schema: AnswerQuestionFromWebInputSchema},
+  output: {schema: AnswerQuestionFromWebOutputSchema},
+  prompt: `You are a helpful AI assistant. 
+  
+  Your personality should be: {{{personality}}}
+  Your verbosity should be: {{{verbosity}}}
+  Your writing style should be: {{{style}}}
+
+  Answer the following question. If you need to search the web to answer, do so.
+  
+  Question: {{{question}}}
+  `,
+});
+
+
 const answerQuestionFromWebFlow = ai.defineFlow(
   {
     name: 'answerQuestionFromWebFlow',
@@ -34,17 +51,7 @@ const answerQuestionFromWebFlow = ai.defineFlow(
     outputSchema: AnswerQuestionFromWebOutputSchema,
   },
   async input => {
-    const llmResponse = await ai.generate({
-      prompt: `You are a helpful AI assistant. Your personality should be: ${input.personality || 'default'}. Your verbosity should be: ${input.verbosity || 'default'}. Your writing style should be: ${input.style || 'casual'}.
-      
-      Answer the following question. If you need to search the web to answer, do so.
-      
-      Question: ${input.question}
-      `,
-    });
-
-    return {
-      answer: llmResponse.text,
-    };
+    const {output} = await answerQuestionPrompt(input);
+    return output!;
   }
 );
