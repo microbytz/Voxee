@@ -5,7 +5,39 @@
  * - answerQuestion - A function that handles the question answering process.
  */
 
-import {ai, answerQuestionPrompt, type AnswerQuestionInput, type AnswerQuestionOutput} from '@/ai/genkit';
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+import type { AnswerQuestionInput, AnswerQuestionOutput } from '@/lib/types';
+
+
+const AnswerQuestionInputSchema = z.object({
+  question: z.string().describe('The question to answer.'),
+  personality: z.string().describe('The personality the AI should adopt.').optional(),
+  verbosity: z.string().describe('How concise or verbose the answer should be.').optional(),
+  style: z.string().describe('The writing style the AI should use.').optional(),
+});
+
+const AnswerQuestionOutputSchema = z.object({
+  answer: z.string().describe('The answer to the question.'),
+});
+
+const answerQuestionPrompt = ai.definePrompt({
+  name: 'answerQuestionPrompt',
+  input: {schema: AnswerQuestionInputSchema},
+  output: {schema: AnswerQuestionOutputSchema},
+  prompt: `You are a helpful AI assistant.
+  
+  Your personality should be: {{{personality}}}
+  Your verbosity should be: {{{verbosity}}}
+  Your writing style should be: {{{style}}}
+
+  Answer the following question.
+  
+  Question: {{{question}}}
+
+  Your final answer must be a JSON object with a single key 'answer'.
+  `,
+});
 
 
 export async function answerQuestion(input: AnswerQuestionInput): Promise<AnswerQuestionOutput> {
@@ -15,8 +47,8 @@ export async function answerQuestion(input: AnswerQuestionInput): Promise<Answer
 const answerQuestionFlow = ai.defineFlow(
   {
     name: 'answerQuestionFlow',
-    inputSchema: AnswerQuestionInput,
-    outputSchema: AnswerQuestionOutput,
+    inputSchema: AnswerQuestionInputSchema,
+    outputSchema: AnswerQuestionOutputSchema,
   },
   async input => {
     const {output} = await answerQuestionPrompt(input);

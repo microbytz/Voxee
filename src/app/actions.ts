@@ -4,8 +4,7 @@ import { answerQuestion } from "@/ai/flows/answer-question-from-web";
 import { generateCode } from "@/ai/flows/generate-code-from-description";
 import { generateImageFromDescription } from "@/ai/flows/generate-image-from-description";
 import { summarizeUploadedDocument } from "@/ai/flows/summarize-uploaded-document";
-import type { AiResponse, Settings } from "@/lib/types";
-import type { AnswerQuestionInput } from "@/ai/genkit";
+import type { AiResponse, Settings, AnswerQuestionInput } from "@/lib/types";
 
 interface HandleUserRequestInput {
   message: string;
