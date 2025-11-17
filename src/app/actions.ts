@@ -51,22 +51,34 @@ export async function handleUserRequest(input: HandleUserRequestInput): Promise<
       };
     }
 
-    const result = await answerQuestionFromWeb({ 
+    const result = await answerQuestionFromWeb({
       question: input.message,
       personality: input.settings.personality || 'default',
       verbosity: input.settings.verbosity || 'default',
       style: input.settings.style || 'casual',
-     });
+    });
     return {
       type: 'text',
       content: result.answer,
     };
   } catch (error) {
     console.error("AI action failed:", error);
+    const errorMessage = (error as Error).message || "Unknown error";
+
+    let userFriendlyMessage = "I'm sorry, I encountered an error while processing your request. Please try again.";
+
+    if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit')) {
+      userFriendlyMessage = "It looks like I'm receiving too many requests right now. Please wait a moment before trying again.";
+    } else if (errorMessage.toLowerCase().includes('api key')) {
+      userFriendlyMessage = "There seems to be an issue with the API key configuration. Please check if the GEMINI_API_KEY is set correctly.";
+    } else if (errorMessage.toLowerCase().includes('flow failed')) {
+        userFriendlyMessage = "I'm having trouble getting a valid response from the AI model. This might be a temporary issue. Please try rephrasing your message or try again in a bit."
+    }
+
     return {
       type: 'text',
-      content: "I'm sorry, I encountered an error while processing your request. Please try again.",
-      error: (error as Error).message || "Unknown error",
+      content: userFriendlyMessage,
+      error: errorMessage,
     };
   }
 }
