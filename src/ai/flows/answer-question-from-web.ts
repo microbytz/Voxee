@@ -7,9 +7,8 @@
  * - AnswerQuestionFromWebOutput - The return type for the answerQuestionFromWeb function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai, google} from '@/ai/genkit';
 import {z} from 'genkit';
-import { googleAI } from '@genkit-ai/google-genai';
 
 
 const AnswerQuestionFromWebInputSchema = z.object({
@@ -33,7 +32,7 @@ const answerQuestionPrompt = ai.definePrompt({
   name: 'answerQuestionPrompt',
   input: {schema: AnswerQuestionFromWebInputSchema},
   output: {schema: AnswerQuestionFromWebOutputSchema},
-  tools: [googleAI.googleSearch],
+  tools: [google.googleSearch],
   prompt: `You are a helpful AI assistant. Your responses should be grounded in search results when possible.
   
   Your personality should be: {{{personality}}}
