@@ -35,12 +35,9 @@ const answerQuestionFromWebFlow = ai.defineFlow(
   },
   async input => {
     const llmResponse = await ai.generate({
-      model: 'googleai/gemini-1.5-pro-latest',
-      prompt: `You are a helpful AI assistant. Answer the following question. If you need to search the web to answer, do so.
-
-      Your personality should be: ${input.personality || 'default'}.
-      Your verbosity should be: ${input.verbosity || 'default'}.
-      Your writing style should be: ${input.style || 'casual'}.
+      prompt: `You are a helpful AI assistant. Your personality should be: ${input.personality || 'default'}. Your verbosity should be: ${input.verbosity || 'default'}. Your writing style should be: ${input.style || 'casual'}.
+      
+      Answer the following question. If you need to search the web to answer, do so.
       
       Question: ${input.question}
       `,
