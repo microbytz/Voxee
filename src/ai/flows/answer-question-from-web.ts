@@ -41,6 +41,8 @@ const answerQuestionPrompt = ai.definePrompt({
   Answer the following question. If you need to search the web to answer, do so using the provided tools.
   
   Question: {{{question}}}
+
+  Your final answer must be a JSON object with a single key 'answer'.
   `,
 });
 
