@@ -1,6 +1,5 @@
 "use server";
 
-import 'dotenv/config';
 import { answerQuestion } from "@/ai/flows/answer-question-from-web";
 import { generateCode } from "@/ai/flows/generate-code-from-description";
 import { generateImageFromDescription } from "@/ai/flows/generate-image-from-description";
