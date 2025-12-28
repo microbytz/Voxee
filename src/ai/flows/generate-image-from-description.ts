@@ -14,7 +14,7 @@ import {z} from 'genkit';
 import type { GenerateImageFromDescriptionInput, GenerateImageFromDescriptionOutput } from '@/lib/types';
 
 const ai = genkit({
-  plugins: [googleAI()],
+  plugins: [googleAI({ apiKey: process.env.GEMINI_API_KEY })],
   model: 'googleai/gemini-1.5-flash-latest',
 });
 
