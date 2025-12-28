@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 
 export default function AIPage() {
   const chatLogRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     // --- Helper Functions ---
@@ -203,10 +204,42 @@ export default function AIPage() {
         const iframe = document.getElementById('previewIframe');
         if(iframe) iframe.srcdoc = '';
     }
+
+    const openFileUpload = (type) => {
+      if (fileInputRef.current) {
+        fileInputRef.current.accept = type === 'image' ? 'image/*' : '*/*';
+        fileInputRef.current.click();
+      }
+    };
+
+    const handleFileSelected = (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        alert(`File selected: ${file.name}`);
+        // Here you would typically read the file and prepare it for upload
+        // For example:
+        // const reader = new FileReader();
+        // reader.onload = (e) => {
+        //   const fileData = e.target.result;
+        //   // Now you have the file data to send to the AI
+        // };
+        // reader.readAsDataURL(file);
+      }
+    };
     
     // --- Event Listeners ---
     const askButton = document.querySelector('.btn-ask');
     if (askButton) askButton.addEventListener('click', askAI);
+
+    const attachFileButton = document.querySelector('.btn-attach-file');
+    if (attachFileButton) attachFileButton.addEventListener('click', () => openFileUpload('any'));
+    
+    const uploadPictureButton = document.querySelector('.btn-upload-picture');
+    if (uploadPictureButton) uploadPictureButton.addEventListener('click', () => openFileUpload('image'));
+
+    if (fileInputRef.current) {
+      fileInputRef.current.addEventListener('change', handleFileSelected);
+    }
     
     const promptEl = document.getElementById('prompt');
     if (promptEl) {
@@ -251,6 +284,11 @@ export default function AIPage() {
     return () => {
         if (askButton) askButton.removeEventListener('click', askAI);
         if (saveButton) saveButton.removeEventListener('click', saveToCloud);
+        if (attachFileButton) attachFileButton.removeEventListener('click', () => openFileUpload('any'));
+        if (uploadPictureButton) uploadPictureButton.removeEventListener('click', () => openFileUpload('image'));
+        if (fileInputRef.current) {
+          fileInputRef.current.removeEventListener('change', handleFileSelected);
+        }
     };
   }, []);
 
@@ -282,10 +320,12 @@ export default function AIPage() {
         #input-area { padding: 20px; border-top: 1px solid #ddd; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);}
         .input-wrapper { display: flex; gap: 10px; align-items: flex-end; }
         textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; resize: none; max-height: 150px; background: #f8f9fa; }
-        button { padding: 12px 24px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: background-color 0.2s; }
-        .btn-ask { background: #007bff; color: white; }
+        button { padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: background-color 0.2s; line-height: 1; font-size: 18px; }
+        .btn-ask { background: #007bff; color: white; padding: 12px 24px; font-size: 16px; }
         .btn-ask:hover { background: #0056b3; }
-        .btn-save { background: #28a745; color: white; display: none; }
+        .btn-attach-file, .btn-upload-picture { background: #f0f2f5; color: #555; }
+        .btn-attach-file:hover, .btn-upload-picture:hover { background: #e2e6ea; }
+        .btn-save { background: #28a745; color: white; display: none; padding: 8px 16px; font-size: 14px;}
         .btn-save:hover { background: #1e7e34; }
         .btn-preview { background: #6f42c1; color: white; padding: 8px 16px; font-size: 12px; margin-top: 10px; }
         .btn-preview:hover { background: #5a359a; }
@@ -318,6 +358,9 @@ export default function AIPage() {
           </div>
           <div className="input-wrapper">
             <textarea id="prompt" rows="1" placeholder="Type your question here..."></textarea>
+            <input type="file" ref={fileInputRef} style={{ display: 'none' }} />
+            <button className="btn-attach-file" title="Attach File">📎</button>
+            <button className="btn-upload-picture" title="Upload Picture">🖼️</button>
             <button className="btn-ask">Ask</button>
           </div>
         </div>
