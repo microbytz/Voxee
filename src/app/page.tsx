@@ -4,98 +4,117 @@ import {useEffect} from 'react';
 
 export default function AIPage() {
   useEffect(() => {
-    let currentPrompt = '';
-    let currentResponse = '';
-
     const global = window as any;
+    global.fullTranscript = '';
 
-    const askAI = async () => {
-      const promptEl = document.getElementById('prompt') as HTMLTextAreaElement;
-      const responseDiv = document.getElementById('response');
-      const saveBtn = document.getElementById('saveBtn');
+    const handleSend = async () => {
+      const input = document.getElementById('userInput') as HTMLTextAreaElement;
+      if (!input) return;
 
-      if (!promptEl || !responseDiv || !saveBtn) return;
+      const text = input.value.trim();
+      if (!text) return;
 
-      const prompt = promptEl.value;
-      if (!prompt) return;
-
-      responseDiv.innerText = 'Thinking...';
-      saveBtn.style.display = 'none';
+      appendMessage('user', text);
+      input.value = '';
+      input.style.height = 'auto';
 
       try {
-        const response = await global.puter.ai.chat(prompt);
-        currentPrompt = prompt;
-        currentResponse = response;
-        responseDiv.innerText = response;
-        saveBtn.style.display = 'inline-block';
-      } catch (e: any) {
-        responseDiv.innerText = 'Error: ' + e.message;
+        const response = await global.puter.ai.chat(text);
+        appendMessage('ai', response);
+
+        global.fullTranscript += `User: ${text}\nAI: ${response}\n\n`;
+      } catch (err: any) {
+        appendMessage('ai', 'Error: ' + err.message);
       }
     };
 
-    const saveToCloud = async () => {
-      const time = new Date().toLocaleTimeString().replace(/:/g, '-');
-      const fileName = `AI_Chat_${time}.txt`;
-      const content = `PROMPT: ${currentPrompt}\n\nRESPONSE:\n${currentResponse}`;
+    const appendMessage = (role: 'user' | 'ai', text: string) => {
+      const chatWindow = document.getElementById('chat-window');
+      if (!chatWindow) return;
 
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message-wrapper';
+
+      const label = role === 'user' ? 'You' : 'Assistant';
+      const msgClass = role === 'user' ? 'user-msg' : 'ai-msg';
+
+      const escapedText = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+      wrapper.innerHTML = `
+        <div class="msg-label" style="${
+          role === 'user' ? 'align-self: flex-end;' : ''
+        }">${label}</div>
+        <div class="message ${msgClass}">${escapedText}</div>
+      `;
+
+      chatWindow.appendChild(wrapper);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    };
+
+    const saveCurrentChat = async () => {
+      if (!global.fullTranscript) return alert('Nothing to save yet!');
+      const fileName = `Chat_${Date.now()}.txt`;
       try {
-        await global.puter.fs.write(fileName, content);
-        alert('Saved to your cloud!');
-        loadHistory(); // Refresh the list
+        await global.puter.fs.write(fileName, global.fullTranscript);
+        alert('Saved to cloud!');
+        loadHistory();
       } catch (e: any) {
         alert('Save failed: ' + e.message);
       }
     };
 
     const loadHistory = async () => {
-      const listDiv = document.getElementById('historyList');
-      if (!listDiv) return;
+      const list = document.getElementById('historyList');
+      if (!list) return;
 
       try {
         const items = await global.puter.fs.readdir('./');
-        const chats = items.filter((item: any) =>
-          item.name.startsWith('AI_Chat_')
-        );
-
-        if (chats.length === 0) {
-          listDiv.innerHTML = '<small>No saved chats yet.</small>';
-          return;
-        }
-
-        listDiv.innerHTML = chats
-          .map(
-            (file: any) =>
-              `<div class="history-item" onclick="window.viewChat('${file.name}')">
-                  📄 ${file.name.replace('AI_Chat_', '').replace('.txt', '')}
-              </div>`
-          )
-          .join('');
+        const chats = items.filter((f: any) => f.name.startsWith('Chat_'));
+        list.innerHTML =
+          chats
+            .map(
+              (f: any) => `
+            <div class="history-item" onclick="viewChat('${f.name}')">
+                📄 ${new Date(
+                  parseInt(f.name.split('_')[1])
+                ).toLocaleString()}
+            </div>
+        `
+            )
+            .join('') || 'No saved chats.';
       } catch (e) {
-        listDiv.innerText = 'Error loading history.';
+        list.innerText = 'Error loading.';
       }
     };
 
-    const viewChat = async (fileName: string) => {
-      const responseDiv = document.getElementById('response');
-      const promptEl = document.getElementById('prompt') as HTMLTextAreaElement;
-      const saveBtn = document.getElementById('saveBtn');
+    const viewChat = async (name: string) => {
+      const chatWindow = document.getElementById('chat-window');
+      if (!chatWindow) return;
 
-      if (!responseDiv || !promptEl || !saveBtn) return;
-
-      responseDiv.innerText = 'Loading file...';
       try {
-        const blob = await global.puter.fs.read(fileName);
-        const content = await blob.text();
-        responseDiv.innerText = content;
-        promptEl.value = '';
-        saveBtn.style.display = 'none';
+        const blob = await global.puter.fs.read(name);
+        const text = await blob.text();
+        const escapedText = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        chatWindow.innerHTML = `<div class="message-wrapper"><div class="message ai-msg" style="white-space:pre-wrap">${escapedText}</div></div>`;
       } catch (e) {
-        responseDiv.innerText = 'Could not read file.';
+        alert('Error reading file.');
       }
     };
 
-    global.askAI = askAI;
-    global.saveToCloud = saveToCloud;
+    global.handleSend = handleSend;
+    global.saveCurrentChat = saveCurrentChat;
+    global.loadHistory = loadHistory;
     global.viewChat = viewChat;
 
     loadHistory();
@@ -106,48 +125,195 @@ export default function AIPage() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
-        #sidebar { width: 250px; background: #fff; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; }
-        #sidebar h3 { font-size: 16px; margin-top: 0; }
-        .history-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
-        .history-item:hover { background: #f8f9fa; color: #007bff; }
-        #main { flex: 1; padding: 40px; max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; }
-        textarea { width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 15px; font-size: 16px; }
-        .actions { display: flex; gap: 10px; }
-        button { padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; }
-        .btn-ask { background: #007bff; color: white; }
-        .btn-save { background: #28a745; color: white; display: none; }
-        #response { margin-top: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); min-height: 100px; white-space: pre-wrap; }
-      `,
+        :root {
+            --bg-dark: #0b0e11;
+            --sidebar-bg: #15191e;
+            --chat-bg: #0b0e11;
+            --user-bubble: #2b5aed;
+            --ai-bubble: #1e2329;
+            --text-main: #e9eaeb;
+            --text-dim: #9ca3af;
+            --accent: #3b82f6;
+        }
+
+        html, body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid #2d343c;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+        }
+
+        .sidebar-header { padding: 0 20px 20px; border-bottom: 1px solid #2d343c; margin-bottom: 10px; font-weight: bold; color: var(--accent); }
+
+        #historyList { flex: 1; overflow-y: auto; padding: 0 10px; }
+
+        .history-item {
+            padding: 12px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-bottom: 5px;
+            transition: 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-dim);
+        }
+
+        .history-item:hover { background: #2d343c; color: white; }
+
+        /* Main Chat Area */
+        #main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        #chat-window {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px 20px 150px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .message-wrapper { width: 100%; max-width: 800px; margin-bottom: 25px; display: flex; flex-direction: column; }
+
+        .message {
+            max-width: 85%;
+            padding: 14px 18px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+
+        .user-msg { background: var(--user-bubble); align-self: flex-end; border-bottom-right-radius: 4px; }
+
+        .ai-msg { background: var(--ai-bubble); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #2d343c; }
+
+        .msg-label { font-size: 11px; margin-bottom: 6px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Input Area */
+        #input-area {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, var(--bg-dark) 30%);
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .input-wrapper {
+            width: 100%;
+            max-width: 800px;
+            background: #1e2329;
+            border: 1px solid #3e454d;
+            border-radius: 12px;
+            display: flex;
+            align-items: flex-end;
+            padding: 10px 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        textarea {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 8px;
+            resize: none;
+            font-size: 15px;
+            outline: none;
+            max-height: 200px;
+        }
+
+        .btn-group { display: flex; gap: 8px; padding-bottom: 4px; }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .send-btn { background: var(--accent); color: white; }
+        .save-btn { background: #2d343c; color: var(--text-dim); }
+        .send-btn:hover { background: #2563eb; }
+        .save-btn:hover { background: #3e454d; color: white; }
+        `,
         }}
       />
       <div id="sidebar">
-        <h3>Previous Chats</h3>
-        <div id="historyList">Loading history...</div>
+        <div className="sidebar-header">☁️ Cloud History</div>
+        <div id="historyList">Loading...</div>
       </div>
 
-      <div id="main">
-        <h2>Personal AI Assistant</h2>
-        <textarea
-          id="prompt"
-          rows={3}
-          placeholder="Type your question here..."
-        ></textarea>
-
-        <div className="actions">
-          <button className="btn-ask" onClick={() => (window as any).askAI()}>
-            Ask AI
-          </button>
-          <button
-            id="saveBtn"
-            className="btn-save"
-            onClick={() => (window as any).saveToCloud()}
-          >
-            💾 Save this Chat
-          </button>
+      <div id="main-container">
+        <div id="chat-window">
+          <div className="message-wrapper">
+            <div className="msg-label">System</div>
+            <div className="message ai-msg">
+              Hello! Ask me anything. Your conversations are saved to your
+              private Puter cloud.
+            </div>
+          </div>
         </div>
 
-        <div id="response">Your answer will appear here...</div>
+        <div id="input-area">
+          <div className="input-wrapper">
+            <textarea
+              id="userInput"
+              placeholder="Ask AI..."
+              rows={1}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = '';
+                target.style.height = target.scrollHeight + 'px';
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  (window as any).handleSend();
+                }
+              }}
+            ></textarea>
+            <div className="btn-group">
+              <button
+                className="save-btn"
+                onClick={() => (window as any).saveCurrentChat()}
+                title="Save session"
+              >
+                💾
+              </button>
+              <button
+                className="send-btn"
+                onClick={() => (window as any).handleSend()}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );
