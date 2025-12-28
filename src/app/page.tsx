@@ -28,7 +28,7 @@ export default function AIPage() {
       }
     };
 
-    const appendMessage = (role: 'user' | 'ai', text: string) => {
+    const appendMessage = (role: 'user' | 'ai', text: any) => {
       const chatWindow = document.getElementById('chat-window');
       if (!chatWindow) return;
 
@@ -37,8 +37,10 @@ export default function AIPage() {
 
       const label = role === 'user' ? 'You' : 'Assistant';
       const msgClass = role === 'user' ? 'user-msg' : 'ai-msg';
+      
+      const safeText = String(text);
 
-      const escapedText = text
+      const escapedText = safeText
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -118,6 +120,16 @@ export default function AIPage() {
     global.viewChat = viewChat;
 
     loadHistory();
+
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    if(input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+    }
   }, []);
 
   return (
@@ -289,12 +301,6 @@ export default function AIPage() {
                 const target = e.target as HTMLTextAreaElement;
                 target.style.height = '';
                 target.style.height = target.scrollHeight + 'px';
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  (window as any).handleSend();
-                }
               }}
             ></textarea>
             <div className="btn-group">
