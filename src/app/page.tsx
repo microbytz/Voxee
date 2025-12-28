@@ -30,19 +30,26 @@ export default function AIPage() {
 
         // Code Detection and Preview Button
         if (sender === 'ai' && text.includes('```html')) {
-            const codeBlock = text.substring(text.indexOf('```html') + 7, text.lastIndexOf('```'));
+            const parts = text.split(/```html|```/);
+            // parts[0] is text before code
+            // parts[1] is the code
+            // parts[2] is text after code
             
-            // Add a container for the code and button
+            if (parts[0]) {
+                const p = document.createElement('p');
+                p.innerText = parts[0];
+                textContainer.appendChild(p);
+            }
+
+            const codeBlock = parts[1] || '';
+            
             const codeWrapper = document.createElement('div');
-            
-            // Add formatted code view
             const preElement = document.createElement('pre');
             const codeElement = document.createElement('code');
-            codeElement.textContent = codeBlock;
+            codeElement.textContent = codeBlock.trim();
             preElement.appendChild(codeElement);
             codeWrapper.appendChild(preElement);
 
-            // Add Preview Button
             const previewBtn = document.createElement('button');
             previewBtn.innerText = '🚀 Preview Code';
             previewBtn.className = 'btn-preview';
@@ -50,6 +57,12 @@ export default function AIPage() {
             codeWrapper.appendChild(previewBtn);
             
             textContainer.appendChild(codeWrapper);
+
+             if (parts[2]) {
+                const p = document.createElement('p');
+                p.innerText = parts[2];
+                textContainer.appendChild(p);
+            }
 
         } else {
             textContainer.innerText = text;
@@ -111,14 +124,25 @@ export default function AIPage() {
       chatLog.querySelectorAll('.message').forEach(msg => {
           const sender = msg.classList.contains('user') ? 'User' : 'AI';
           const textEl = msg.querySelector('.text');
-          const codeEl = textEl.querySelector('code');
+          
           let text = '';
-          if (codeEl) {
-            text = '```html\n' + codeEl.textContent + '\n```';
-          } else {
-            text = textEl.innerText;
+          // Reconstruct the message from its parts
+          textEl.childNodes.forEach(node => {
+              if (node.nodeName === 'P') {
+                  text += node.innerText + '\n';
+              } else if (node.nodeName === 'DIV' && node.querySelector('pre')) {
+                  const code = node.querySelector('code').textContent;
+                  text += '```html\n' + code + '\n```\n';
+              } else if (node.nodeType === Node.TEXT_NODE) {
+                  text += node.textContent;
+              }
+          });
+          
+          if (!textEl.childNodes.length) {
+             text = textEl.innerText;
           }
-          content += `${sender}: ${text}\n\n`;
+
+          content += `${sender}: ${text.trim()}\n\n`;
       });
 
 
@@ -172,12 +196,14 @@ export default function AIPage() {
             
             chatLog.innerHTML = ''; // Clear loading message
             
-            const lines = content.replace('Chat History:\n\n', '').split('\n\n');
-            lines.forEach(line => {
-                if (line.startsWith('User: ')) {
-                    addMessage('user', line.substring(6));
-                } else if (line.startsWith('AI: ')) {
-                    addMessage('ai', line.substring(4));
+            const messages = content.replace('Chat History:\n\n', '').split(/(?=User:|AI:)/g);
+            
+            messages.forEach(msg => {
+                const trimmedMsg = msg.trim();
+                if (trimmedMsg.startsWith('User: ')) {
+                    addMessage('user', trimmedMsg.substring(6));
+                } else if (trimmedMsg.startsWith('AI: ')) {
+                    addMessage('ai', trimmedMsg.substring(4));
                 }
             });
 
