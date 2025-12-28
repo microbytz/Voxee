@@ -1,3 +1,4 @@
+
 'use client';
 
 import {useEffect} from 'react';
@@ -46,12 +47,17 @@ export default function AIPage() {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+      
+      const contentHtml = escapedText.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+          return `<pre><code>${code}</code></pre>`;
+      }).replace(/\n/g, '<br>');
+
 
       wrapper.innerHTML = `
         <div class="msg-label" style="${
           role === 'user' ? 'align-self: flex-end;' : ''
         }">${label}</div>
-        <div class="message ${msgClass}">${escapedText}</div>
+        <div class="message ${msgClass}">${contentHtml}</div>
       `;
 
       chatWindow.appendChild(wrapper);
@@ -116,7 +122,6 @@ export default function AIPage() {
 
     global.handleSend = handleSend;
     global.saveCurrentChat = saveCurrentChat;
-    global.loadHistory = loadHistory;
     global.viewChat = viewChat;
 
     loadHistory();
@@ -213,6 +218,16 @@ export default function AIPage() {
             font-size: 15px;
             line-height: 1.6;
             word-wrap: break-word;
+        }
+        
+        .message pre {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            white-space: pre;
+            font-family: 'Courier New', Courier, monospace;
         }
 
         .user-msg { background: var(--user-bubble); align-self: flex-end; border-bottom-right-radius: 4px; }
@@ -324,3 +339,5 @@ export default function AIPage() {
     </>
   );
 }
+
+    
