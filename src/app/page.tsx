@@ -120,9 +120,27 @@ export default function AIPage() {
       }
     };
 
+    const newChat = () => {
+        const chatWindow = document.getElementById('chat-window');
+        if (chatWindow) {
+            chatWindow.innerHTML = `
+                <div class="message-wrapper">
+                    <div class="msg-label">System</div>
+                    <div class="message ai-msg">
+                        Hello! Ask me anything. Your conversations are saved to your private Puter cloud.
+                    </div>
+                </div>
+            `;
+        }
+        global.fullTranscript = "";
+    };
+
+
     global.handleSend = handleSend;
     global.saveCurrentChat = saveCurrentChat;
     global.viewChat = viewChat;
+    global.newChat = newChat;
+
 
     loadHistory();
 
@@ -174,6 +192,25 @@ export default function AIPage() {
         }
 
         .sidebar-header { padding: 0 20px 20px; border-bottom: 1px solid #2d343c; margin-bottom: 10px; font-weight: bold; color: var(--accent); }
+        
+        .new-chat-btn {
+            display: block;
+            width: calc(100% - 40px);
+            margin: 0 20px 10px;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.2s;
+        }
+
+        .new-chat-btn:hover {
+            background: #2563eb;
+        }
 
         #historyList { flex: 1; overflow-y: auto; padding: 0 10px; }
 
@@ -292,6 +329,7 @@ export default function AIPage() {
       />
       <div id="sidebar">
         <div className="sidebar-header">☁️ Cloud History</div>
+        <button className="new-chat-btn" onClick={() => (window as any).newChat()}>+ New Chat</button>
         <div id="historyList">Loading...</div>
       </div>
 
