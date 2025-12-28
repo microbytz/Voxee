@@ -1,5 +1,5 @@
-import type { Metadata } from 'next';
-import './globals.css';
+import type {Metadata} from 'next';
+import Script from 'next/script';
 
 export const metadata: Metadata = {
   title: 'AI Assistant + History',
@@ -13,6 +13,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
+      <head>
+        <Script src="https://js.puter.com/v2/"></Script>
+      </head>
       <body>{children}</body>
     </html>
   );
