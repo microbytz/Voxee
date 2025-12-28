@@ -6,14 +6,13 @@
 import { config } from 'dotenv';
 config();
 
-import { ai } from 'genkit';
+import { genkit, ai } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
-import { z } from 'zod';
+import { z } from 'genkit/zod';
 import { GenerateImageFromDescriptionInput, GenerateImageFromDescriptionOutput } from '@/lib/types';
 
 const GenerateImageInputSchema = z.object({
   imageDescription: z.string().describe('A description of the image to generate.'),
-  image: z.string().optional().describe('An optional base image to modify as a data URI.'),
 });
 
 const GenerateImageOutputSchema = z.object({
@@ -21,7 +20,7 @@ const GenerateImageOutputSchema = z.object({
   progress: z.string().optional().describe('Progress updates during image generation.')
 });
 
-ai.configure({
+genkit.configure({
   plugins: [googleAI({ apiKey: process.env.GEMINI_API_KEY })],
   logLevel: 'debug',
   enableTracing: true,

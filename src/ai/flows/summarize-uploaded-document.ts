@@ -6,9 +6,9 @@
 import { config } from 'dotenv';
 config();
 
-import { ai } from 'genkit';
+import { genkit, ai } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
-import { z } from 'zod';
+import { z } from 'genkit/zod';
 import { SummarizeUploadedDocumentInput, SummarizeUploadedDocumentOutput } from '@/lib/types';
 
 const SummarizeDocumentInputSchema = z.object({
@@ -19,7 +19,7 @@ const SummarizeDocumentOutputSchema = z.object({
   summary: z.string().describe('The summary of the document.'),
 });
 
-ai.configure({
+genkit.configure({
   plugins: [googleAI({ apiKey: process.env.GEMINI_API_KEY })],
   logLevel: 'debug',
   enableTracing: true,

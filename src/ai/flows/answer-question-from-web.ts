@@ -6,9 +6,9 @@
 import { config } from 'dotenv';
 config();
 
-import { ai } from 'genkit';
+import { genkit, ai } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
-import { z } from 'zod';
+import { z } from 'genkit/zod';
 import { AnswerQuestionInput, AnswerQuestionOutput } from '@/lib/types';
 
 const AnswerQuestionInputSchema = z.object({
@@ -22,7 +22,7 @@ const AnswerQuestionOutputSchema = z.object({
   answer: z.string().describe('The answer to the question.'),
 });
 
-ai.configure({
+genkit.configure({
   plugins: [googleAI({ apiKey: process.env.GEMINI_API_KEY })],
   logLevel: 'debug',
   enableTracing: true,
