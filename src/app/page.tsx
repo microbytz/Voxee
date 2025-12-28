@@ -6,9 +6,7 @@ export default function AIPage() {
   const chatLogRef = useRef(null);
 
   useEffect(() => {
-    let currentPrompt = '';
-    let currentResponse = '';
-
+    // --- Helper Functions ---
     const scrollToBottom = () => {
       if (chatLogRef.current) {
         chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
@@ -25,20 +23,45 @@ export default function AIPage() {
         const avatarDiv = document.createElement('div');
         avatarDiv.className = 'avatar';
         avatarDiv.innerText = sender === 'user' ? '🧑' : '🤖';
+        
+        const textContainer = document.createElement('div');
+        textContainer.className = 'text';
 
-        const textDiv = document.createElement('div');
-        textDiv.className = 'text';
-        textDiv.innerText = text;
+        // Code Detection and Preview Button
+        if (sender === 'ai' && text.includes('```html')) {
+            const codeBlock = text.substring(text.indexOf('```html') + 7, text.lastIndexOf('```'));
+            
+            // Add a container for the code and button
+            const codeWrapper = document.createElement('div');
+            
+            // Add formatted code view
+            const preElement = document.createElement('pre');
+            const codeElement = document.createElement('code');
+            codeElement.textContent = codeBlock;
+            preElement.appendChild(codeElement);
+            codeWrapper.appendChild(preElement);
+
+            // Add Preview Button
+            const previewBtn = document.createElement('button');
+            previewBtn.innerText = '🚀 Preview Code';
+            previewBtn.className = 'btn-preview';
+            previewBtn.onclick = () => previewCode(codeBlock);
+            codeWrapper.appendChild(previewBtn);
+            
+            textContainer.appendChild(codeWrapper);
+
+        } else {
+            textContainer.innerText = text;
+        }
 
         messageDiv.appendChild(avatarDiv);
-        messageDiv.appendChild(textDiv);
+        messageDiv.appendChild(textContainer);
         chatLog.appendChild(messageDiv);
         scrollToBottom();
     };
 
-
     const askAI = async () => {
-      const promptEl = document.getElementById('prompt') as HTMLTextAreaElement;
+      const promptEl = document.getElementById('prompt');
       const saveBtn = document.getElementById('saveBtn');
 
       if (!promptEl || !saveBtn) return;
@@ -61,20 +84,18 @@ export default function AIPage() {
 
       try {
         const response = await window.puter.ai.chat(prompt);
-        currentPrompt = prompt;
-        currentResponse = response;
         
         const thinkingEl = document.getElementById('thinking');
         if(thinkingEl) {
-            thinkingEl.querySelector('.text').innerText = response;
-            thinkingEl.id = '';
+            chatLogRef.current.removeChild(thinkingEl);
         }
+        addMessage('ai', response);
 
         saveBtn.style.display = 'inline-block';
       } catch (e) {
         const thinkingEl = document.getElementById('thinking');
         if(thinkingEl) {
-            thinkingEl.querySelector('.text').innerText = "Error: " + (e as Error).message;
+            thinkingEl.querySelector('.text').innerText = "Error: " + e.message;
             thinkingEl.id = '';
         }
       }
@@ -84,12 +105,18 @@ export default function AIPage() {
     const saveToCloud = async () => {
       const time = new Date().toLocaleTimeString().replace(/:/g, '-');
       const fileName = `AI_Chat_${time}.txt`;
-      // We now save the whole chat log instead of just the last exchange
       const chatLog = document.getElementById('chat-log');
       let content = "Chat History:\n\n";
       chatLog.querySelectorAll('.message').forEach(msg => {
           const sender = msg.classList.contains('user') ? 'User' : 'AI';
-          const text = msg.querySelector('.text').innerText;
+          const textEl = msg.querySelector('.text');
+          const codeEl = textEl.querySelector('code');
+          let text = '';
+          if (codeEl) {
+            text = '```html\n' + codeEl.textContent + '\n```';
+          } else {
+            text = textEl.innerText;
+          }
           content += `${sender}: ${text}\n\n`;
       });
 
@@ -97,9 +124,9 @@ export default function AIPage() {
       try {
         await window.puter.fs.write(fileName, content);
         alert('Saved to your cloud!');
-        loadHistory(); // Refresh the list
+        loadHistory(); 
       } catch (e) {
-        alert('Save failed: ' + (e as Error).message);
+        alert('Save failed: ' + e.message);
       }
     };
 
@@ -131,7 +158,7 @@ export default function AIPage() {
 
     const viewChat = async (fileName) => {
         const chatLog = document.getElementById('chat-log');
-        const promptEl = document.getElementById('prompt') as HTMLTextAreaElement;
+        const promptEl = document.getElementById('prompt');
         const saveBtn = document.getElementById('saveBtn');
 
         if (!chatLog || !promptEl || !saveBtn) return;
@@ -143,8 +170,7 @@ export default function AIPage() {
             const content = await blob.text();
             
             chatLog.innerHTML = ''; // Clear loading message
-
-            // Simple parser for the saved format
+            
             const lines = content.replace('Chat History:\n\n', '').split('\n\n');
             lines.forEach(line => {
                 if (line.startsWith('User: ')) {
@@ -161,12 +187,26 @@ export default function AIPage() {
         }
         scrollToBottom();
     };
-    
-    // Attach event listeners
-    const askButton = document.querySelector('.btn-ask');
-    if (askButton) {
-      askButton.addEventListener('click', askAI);
+
+    const previewCode = (code) => {
+        const modal = document.getElementById('previewModal');
+        const iframe = document.getElementById('previewIframe');
+        if (!modal || !iframe) return;
+        
+        iframe.srcdoc = code;
+        modal.style.display = 'flex';
+    };
+
+    const closeModal = () => {
+        const modal = document.getElementById('previewModal');
+        if(modal) modal.style.display = 'none';
+        const iframe = document.getElementById('previewIframe');
+        if(iframe) iframe.srcdoc = '';
     }
+    
+    // --- Event Listeners ---
+    const askButton = document.querySelector('.btn-ask');
+    if (askButton) askButton.addEventListener('click', askAI);
     
     const promptEl = document.getElementById('prompt');
     if (promptEl) {
@@ -183,31 +223,34 @@ export default function AIPage() {
     }
 
     const saveButton = document.getElementById('saveBtn');
-    if (saveButton) {
-      saveButton.addEventListener('click', saveToCloud);
-    }
+    if (saveButton) saveButton.addEventListener('click', saveToCloud);
 
     const historyList = document.getElementById('historyList');
     if (historyList) {
         historyList.addEventListener('click', (e) => {
-            const target = e.target as HTMLElement;
+            const target = e.target;
             const item = target.closest('.history-item');
             if (item && item.dataset.filename) {
                 viewChat(item.dataset.filename);
             }
         });
     }
+    
+    const closeBtn = document.querySelector('.modal-close');
+    if(closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    window.addEventListener('click', (event) => {
+      const modal = document.getElementById('previewModal');
+      if (event.target == modal) {
+        closeModal();
+      }
+    });
 
     loadHistory();
 
-    // Cleanup function to remove event listeners
     return () => {
-        if (askButton) {
-            askButton.removeEventListener('click', askAI);
-        }
-        if (saveButton) {
-            saveButton.removeEventListener('click', saveToCloud);
-        }
+        if (askButton) askButton.removeEventListener('click', askAI);
+        if (saveButton) saveButton.removeEventListener('click', saveToCloud);
     };
   }, []);
 
@@ -224,24 +267,40 @@ export default function AIPage() {
         .history-item:hover { background: #f8f9fa; color: #007bff; }
         
         /* Main Chat Styles */
-        #main { flex: 1; max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; height: 100vh; padding: 0; }
-        #chat-log { flex-grow: 1; padding: 20px; overflow-y: auto; }
+        #main { flex: 1; max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; height: 100vh; padding: 0; background-color: #f0f2f5; }
+        #chat-log { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
         .message { display: flex; gap: 15px; margin-bottom: 20px; max-width: 90%; }
-        .message .avatar { font-size: 24px; }
+        .message .avatar { font-size: 24px; flex-shrink: 0; }
         .message .text { padding: 15px; border-radius: 12px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
         .message.user { align-self: flex-end; flex-direction: row-reverse; }
         .message.user .text { background: #007bff; color: white; border-top-right-radius: 0; }
         .message.ai { align-self: flex-start; }
         .message.ai .text { background: #fff; color: #333; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-top-left-radius: 0; }
-
+        .message pre { background: #2d2d2d; color: #f1f1f1; padding: 15px; border-radius: 8px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; }
+        
         /* Input Area Styles */
-        #input-area { padding: 20px; border-top: 1px solid #ddd; background: #f8f9fa; }
+        #input-area { padding: 20px; border-top: 1px solid #ddd; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);}
         .input-wrapper { display: flex; gap: 10px; align-items: flex-end; }
-        textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; resize: none; max-height: 150px; }
-        button { padding: 12px 24px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; }
+        textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; resize: none; max-height: 150px; background: #f8f9fa; }
+        button { padding: 12px 24px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: background-color 0.2s; }
         .btn-ask { background: #007bff; color: white; }
+        .btn-ask:hover { background: #0056b3; }
         .btn-save { background: #28a745; color: white; display: none; }
+        .btn-save:hover { background: #1e7e34; }
+        .btn-preview { background: #6f42c1; color: white; padding: 8px 16px; font-size: 12px; margin-top: 10px; }
+        .btn-preview:hover { background: #5a359a; }
+
+        /* Modal Styles */
+        #previewModal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 80%; height: 80%; box-shadow: 0 5px 15px rgba(0,0,0,0.3); border-radius: 10px; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .modal-header h2 { margin: 0; }
+        .modal-close { color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .modal-close:hover, .modal-close:focus { color: black; }
+        #previewIframe { width: 100%; height: 100%; border: none; margin-top: 15px; }
       `}</style>
+
+      {/* --- App HTML --- */}
       <div id="sidebar">
         <h3>Previous Chats</h3>
         <div id="historyList">Loading history...</div>
@@ -250,7 +309,7 @@ export default function AIPage() {
         <div id="chat-log" ref={chatLogRef}>
             <div className="message ai">
                 <div className="avatar">🤖</div>
-                <div className="text">Hello! Ask me anything.</div>
+                <div className="text">Hello! Ask me to create something with HTML, and I'll show you a preview. For example: "create a simple game with a bouncing ball".</div>
             </div>
         </div>
         <div id="input-area">
@@ -261,6 +320,17 @@ export default function AIPage() {
             <textarea id="prompt" rows="1" placeholder="Type your question here..."></textarea>
             <button className="btn-ask">Ask</button>
           </div>
+        </div>
+      </div>
+
+      {/* --- Modal for Code Preview --- */}
+      <div id="previewModal">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h2>Code Preview</h2>
+            <span className="modal-close">&times;</span>
+          </div>
+          <iframe id="previewIframe" title="Code Preview"></iframe>
         </div>
       </div>
     </>
