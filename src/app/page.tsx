@@ -8,28 +8,35 @@ export default function AIPage() {
     const global = window as any;
     global.fullTranscript = '';
 
-    const handleSend = async () => {
+    const handleSend = async (fileDataUri?: string) => {
       const input = document.getElementById('userInput') as HTMLTextAreaElement;
       if (!input) return;
 
       const text = input.value.trim();
-      if (!text) return;
+      if (!text && !fileDataUri) return;
 
-      appendMessage('user', text);
+      if (text) {
+        appendMessage('user', text);
+      }
+      
       input.value = '';
       input.style.height = 'auto';
 
       try {
-        const response = await global.puter.ai.chat(text);
+        const payload = fileDataUri ? { image: fileDataUri, prompt: text } : text;
+        const response = await global.puter.ai.chat(payload);
         appendMessage('ai', response);
 
-        global.fullTranscript += `User: ${text}\nAI: ${response}\n\n`;
+        const transcriptText = text ? `User: ${text}\n` : '';
+        const transcriptImage = fileDataUri ? `User uploaded an image.\n` : '';
+        global.fullTranscript += `${transcriptText}${transcriptImage}AI: ${response}\n\n`;
+
       } catch (err: any) {
         appendMessage('ai', 'Error: ' + err.message);
       }
     };
 
-    const appendMessage = (role: 'user' | 'ai', text: any) => {
+    const appendMessage = (role: 'user' | 'ai', content: any) => {
       const chatWindow = document.getElementById('chat-window');
       if (!chatWindow) return;
 
@@ -39,26 +46,31 @@ export default function AIPage() {
       const label = role === 'user' ? 'You' : 'Assistant';
       const msgClass = role === 'user' ? 'user-msg' : 'ai-msg';
       
-      const safeText = String(text);
-
-      const escapedText = safeText
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+      let contentHtml;
       
-      const contentHtml = escapedText.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-          const codeId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          return `<div class="code-block-wrapper">
-                    <div class="code-block-header">
-                        <span>${lang || 'code'}</span>
-                        <button onclick="copyCode('${codeId}', this)">Copy</button>
-                    </div>
-                    <pre><code id="${codeId}">${escapedCode}</code></pre>
-                  </div>`;
-      }).replace(/\n/g, '<br>');
+      if (typeof content === 'string' && content.startsWith('data:image')) {
+          contentHtml = `<img src="${content}" alt="User upload" style="max-width: 100%; border-radius: 10px;" />`;
+      } else {
+          const safeText = String(content);
+          const escapedText = safeText
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+          
+          contentHtml = escapedText.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+              const codeId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              return `<div class="code-block-wrapper">
+                        <div class="code-block-header">
+                            <span>${lang || 'code'}</span>
+                            <button onclick="copyCode('${codeId}', this)">Copy</button>
+                        </div>
+                        <pre><code id="${codeId}">${escapedCode}</code></pre>
+                      </div>`;
+          }).replace(/\n/g, '<br>');
+      }
 
 
       wrapper.innerHTML = `
@@ -213,12 +225,27 @@ export default function AIPage() {
         }
     };
 
+    const handlePhotoUpload = (event: Event) => {
+        const input = event.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUri = e.target?.result as string;
+            appendMessage('user', dataUri);
+            handleSend(dataUri);
+        };
+        reader.readAsDataURL(file);
+    };
+
 
     global.handleSend = handleSend;
     global.saveCurrentChat = saveCurrentChat;
     global.viewChat = viewChat;
     global.newChat = newChat;
     global.copyCode = copyCode;
+    global.handlePhotoUpload = handlePhotoUpload;
 
     loadHistory();
 
@@ -230,6 +257,11 @@ export default function AIPage() {
                 handleSend();
             }
         });
+    }
+
+    const photoInput = document.getElementById('photoInput');
+    if (photoInput) {
+        photoInput.addEventListener('change', handlePhotoUpload);
     }
   }, []);
 
@@ -445,6 +477,16 @@ export default function AIPage() {
             font-weight: 600;
             transition: 0.2s;
         }
+        
+        .icon-btn {
+            background: #2d343c;
+            color: var(--text-dim);
+            padding: 8px;
+        }
+        .icon-btn:hover {
+            background: #3e454d;
+            color: white;
+        }
 
         .send-btn { background: var(--accent); color: white; }
         .save-btn { background: #2d343c; color: var(--text-dim); }
@@ -453,6 +495,7 @@ export default function AIPage() {
         `,
         }}
       />
+      <input type="file" id="photoInput" accept="image/*" style={{ display: 'none' }} />
       <div id="sidebar">
         <div className="sidebar-header">☁️ Cloud History</div>
         <button className="new-chat-btn" onClick={() => (window as any).newChat()}>+ New Chat</button>
@@ -489,6 +532,13 @@ export default function AIPage() {
                 title="Save session"
               >
                 💾
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => (document.getElementById('photoInput') as HTMLInputElement).click()}
+                title="Send Photo"
+              >
+                📸
               </button>
               <button
                 className="send-btn"
