@@ -98,6 +98,9 @@ export default function AIPage() {
                 list.innerHTML = "<div class='history-item' style='cursor: default; color: var(--text-dim);'>No saved chats.</div>";
                 return;
             }
+            
+            chats.sort((a:any, b:any) => parseInt(b.name.split('_')[1]) - parseInt(a.name.split('_')[1]));
+
 
             chats.forEach((f: any) => {
                 const div = document.createElement('div');
@@ -113,24 +116,9 @@ export default function AIPage() {
                 div.innerHTML = `📄 ${displayName}`;
                 div.onclick = () => viewChat(f.name);
 
-                // Add event listeners for rename
-                let pressTimer: any;
-
-                div.addEventListener('mousedown', (e) => {
-                    if (e.button === 2) return; // Ignore right-clicks for the long-press timer
-                    pressTimer = window.setTimeout(() => handleRename(f.name), 800);
-                });
-                
-                div.addEventListener('mouseup', () => clearTimeout(pressTimer));
-                div.addEventListener('mouseleave', () => clearTimeout(pressTimer));
-                div.addEventListener('touchstart', () => {
-                    pressTimer = window.setTimeout(() => handleRename(f.name), 800);
-                });
-                div.addEventListener('touchend', () => clearTimeout(pressTimer));
-                
                 div.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
-                    handleRename(f.name);
+                    handleRename(div, f.name);
                 });
 
                 list.appendChild(div);
@@ -139,25 +127,39 @@ export default function AIPage() {
             list.innerText = 'Error loading history.';
         }
     };
-    
-    const handleRename = async (currentName: string) => {
+
+    const handleRename = (div: HTMLElement, currentName: string) => {
         const nameParts = currentName.replace('.txt', '').split('_');
         const originalTimestamp = nameParts[1];
-        
         const currentCustomName = nameParts.length > 2 ? nameParts.slice(2).join('_').replace(/_/g, ' ') : '';
-        const newName = prompt("Enter new name for the chat:", currentCustomName);
-
-        if (newName !== null && newName.trim() !== "") {
-            const finalNewName = `Chat_${originalTimestamp}_${newName.trim().replace(/ /g, '_')}.txt`;
-            try {
-                if (currentName !== finalNewName) {
+    
+        div.innerHTML = `📄 <input type="text" value="${currentCustomName}" class="rename-input" />`;
+        const input = div.querySelector('.rename-input') as HTMLInputElement;
+        input.focus();
+        input.select();
+    
+        const saveRename = async () => {
+            const newName = input.value.trim();
+            if (newName && newName !== currentCustomName) {
+                const finalNewName = `Chat_${originalTimestamp}_${newName.replace(/ /g, '_')}.txt`;
+                try {
                     await global.puter.fs.rename(currentName, finalNewName);
+                } catch (err: any) {
+                    alert(`Rename failed: ${err.message}`);
                 }
-                loadHistory(); // Refresh the list
-            } catch (err: any) {
-                alert(`Rename failed: ${err.message}`);
             }
-        }
+            // Always refresh history to revert the input field
+            loadHistory();
+        };
+    
+        input.addEventListener('blur', saveRename);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                saveRename();
+            } else if (e.key === 'Escape') {
+                loadHistory(); // Revert by reloading
+            }
+        });
     };
 
 
@@ -217,8 +219,6 @@ export default function AIPage() {
     global.viewChat = viewChat;
     global.newChat = newChat;
     global.copyCode = copyCode;
-    global.handleRename = handleRename;
-
 
     loadHistory();
 
@@ -306,8 +306,19 @@ export default function AIPage() {
             text-overflow: ellipsis;
             color: var(--text-dim);
         }
-
+        
         .history-item:hover { background: #2d343c; color: white; }
+
+        .rename-input {
+            background: #2d343c;
+            color: white;
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            padding: 2px 5px;
+            font-size: 13px;
+            outline: none;
+            width: calc(100% - 25px);
+        }
 
         /* Main Chat Area */
         #main-container {
