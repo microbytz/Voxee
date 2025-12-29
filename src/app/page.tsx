@@ -107,7 +107,7 @@ export default function AIPage() {
                 const timestamp = parseInt(nameParts[1]);
                 let displayName = new Date(timestamp).toLocaleString();
                 if (nameParts.length > 2) {
-                    displayName = nameParts.slice(2).join('_');
+                    displayName = nameParts.slice(2).join('_').replace(/_/g, ' ');
                 }
                 
                 div.innerHTML = `📄 ${displayName}`;
@@ -117,7 +117,7 @@ export default function AIPage() {
                 let pressTimer: any;
 
                 div.addEventListener('mousedown', (e) => {
-                    if (e.button === 2) return; // Ignore right-clicks for this
+                    if (e.button === 2) return; // Ignore right-clicks for the long-press timer
                     pressTimer = window.setTimeout(() => handleRename(f.name), 800);
                 });
                 
@@ -127,6 +127,7 @@ export default function AIPage() {
                     pressTimer = window.setTimeout(() => handleRename(f.name), 800);
                 });
                 div.addEventListener('touchend', () => clearTimeout(pressTimer));
+                
                 div.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     handleRename(f.name);
@@ -143,13 +144,15 @@ export default function AIPage() {
         const nameParts = currentName.replace('.txt', '').split('_');
         const originalTimestamp = nameParts[1];
         
-        const currentCustomName = nameParts.length > 2 ? nameParts.slice(2).join('_') : '';
+        const currentCustomName = nameParts.length > 2 ? nameParts.slice(2).join('_').replace(/_/g, ' ') : '';
         const newName = prompt("Enter new name for the chat:", currentCustomName);
 
         if (newName !== null && newName.trim() !== "") {
             const finalNewName = `Chat_${originalTimestamp}_${newName.trim().replace(/ /g, '_')}.txt`;
             try {
-                await global.puter.fs.rename(currentName, finalNewName);
+                if (currentName !== finalNewName) {
+                    await global.puter.fs.rename(currentName, finalNewName);
+                }
                 loadHistory(); // Refresh the list
             } catch (err: any) {
                 alert(`Rename failed: ${err.message}`);
@@ -340,6 +343,7 @@ export default function AIPage() {
             margin: 10px 0;
             overflow: hidden;
             border: 1px solid var(--code-header-bg);
+            position: relative;
         }
 
         .code-block-header {
@@ -360,6 +364,9 @@ export default function AIPage() {
             border-radius: 5px;
             cursor: pointer;
             font-size: 12px;
+            position: absolute;
+            top: 6px;
+            right: 12px;
         }
         .code-block-header button:hover {
              background: #718096;
@@ -368,6 +375,7 @@ export default function AIPage() {
         .message pre {
             margin: 0;
             padding: 16px;
+            padding-top: 40px;
             overflow-x: auto;
             white-space: pre;
             font-family: 'Courier New', Courier, monospace;
