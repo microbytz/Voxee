@@ -85,28 +85,78 @@ export default function AIPage() {
     };
 
     const loadHistory = async () => {
-      const list = document.getElementById('historyList');
-      if (!list) return;
+        const list = document.getElementById('historyList');
+        if (!list) return;
 
-      try {
-        const items = await global.puter.fs.readdir('./');
-        const chats = items.filter((f: any) => f.name.startsWith('Chat_'));
-        list.innerHTML =
-          chats
-            .map(
-              (f: any) => `
-            <div class="history-item" onclick="viewChat('${f.name}')">
-                📄 ${new Date(
-                  parseInt(f.name.split('_')[1])
-                ).toLocaleString()}
-            </div>
-        `
-            )
-            .join('') || 'No saved chats.';
-      } catch (e) {
-        list.innerText = 'Error loading.';
-      }
+        try {
+            const items = await global.puter.fs.readdir('./');
+            const chats = items.filter((f: any) => f.name.startsWith('Chat_'));
+            
+            list.innerHTML = ''; // Clear the list first
+
+            if (chats.length === 0) {
+                list.innerHTML = "<div class='history-item' style='cursor: default; color: var(--text-dim);'>No saved chats.</div>";
+                return;
+            }
+
+            chats.forEach((f: any) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                
+                const nameParts = f.name.replace('.txt', '').split('_');
+                const timestamp = parseInt(nameParts[1]);
+                let displayName = new Date(timestamp).toLocaleString();
+                if (nameParts.length > 2) {
+                    displayName = nameParts.slice(2).join('_');
+                }
+                
+                div.innerHTML = `📄 ${displayName}`;
+                div.onclick = () => viewChat(f.name);
+
+                // Add event listeners for rename
+                let pressTimer: any;
+
+                div.addEventListener('mousedown', (e) => {
+                    if (e.button === 2) return; // Ignore right-clicks for this
+                    pressTimer = window.setTimeout(() => handleRename(f.name), 800);
+                });
+                
+                div.addEventListener('mouseup', () => clearTimeout(pressTimer));
+                div.addEventListener('mouseleave', () => clearTimeout(pressTimer));
+                div.addEventListener('touchstart', () => {
+                    pressTimer = window.setTimeout(() => handleRename(f.name), 800);
+                });
+                div.addEventListener('touchend', () => clearTimeout(pressTimer));
+                div.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    handleRename(f.name);
+                });
+
+                list.appendChild(div);
+            });
+        } catch (e) {
+            list.innerText = 'Error loading history.';
+        }
     };
+    
+    const handleRename = async (currentName: string) => {
+        const nameParts = currentName.replace('.txt', '').split('_');
+        const originalTimestamp = nameParts[1];
+        
+        const currentCustomName = nameParts.length > 2 ? nameParts.slice(2).join('_') : '';
+        const newName = prompt("Enter new name for the chat:", currentCustomName);
+
+        if (newName !== null && newName.trim() !== "") {
+            const finalNewName = `Chat_${originalTimestamp}_${newName.trim().replace(/ /g, '_')}.txt`;
+            try {
+                await global.puter.fs.rename(currentName, finalNewName);
+                loadHistory(); // Refresh the list
+            } catch (err: any) {
+                alert(`Rename failed: ${err.message}`);
+            }
+        }
+    };
+
 
     const viewChat = async (name: string) => {
       const chatWindow = document.getElementById('chat-window');
@@ -164,6 +214,7 @@ export default function AIPage() {
     global.viewChat = viewChat;
     global.newChat = newChat;
     global.copyCode = copyCode;
+    global.handleRename = handleRename;
 
 
     loadHistory();
