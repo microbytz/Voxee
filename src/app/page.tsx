@@ -49,7 +49,15 @@ export default function AIPage() {
         .replace(/'/g, '&#039;');
       
       const contentHtml = escapedText.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-          return `<pre><code>${code}</code></pre>`;
+          const codeId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          return `<div class="code-block-wrapper">
+                    <div class="code-block-header">
+                        <span>${lang || 'code'}</span>
+                        <button onclick="copyCode('${codeId}', this)">Copy</button>
+                    </div>
+                    <pre><code id="${codeId}">${escapedCode}</code></pre>
+                  </div>`;
       }).replace(/\n/g, '<br>');
 
 
@@ -134,12 +142,28 @@ export default function AIPage() {
         }
         global.fullTranscript = "";
     };
+    
+    const copyCode = (codeId: string, buttonElement: HTMLButtonElement) => {
+        const codeElement = document.getElementById(codeId);
+        if (codeElement) {
+            navigator.clipboard.writeText(codeElement.innerText).then(() => {
+                buttonElement.innerText = 'Copied!';
+                setTimeout(() => {
+                    buttonElement.innerText = 'Copy';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy code: ', err);
+                alert('Failed to copy code.');
+            });
+        }
+    };
 
 
     global.handleSend = handleSend;
     global.saveCurrentChat = saveCurrentChat;
     global.viewChat = viewChat;
     global.newChat = newChat;
+    global.copyCode = copyCode;
 
 
     loadHistory();
@@ -169,6 +193,8 @@ export default function AIPage() {
             --text-main: #e9eaeb;
             --text-dim: #9ca3af;
             --accent: #3b82f6;
+            --code-bg: #0d1117;
+            --code-header-bg: #2d343c;
         }
 
         html, body {
@@ -257,14 +283,44 @@ export default function AIPage() {
             word-wrap: break-word;
         }
         
+        .code-block-wrapper {
+            background-color: var(--code-bg);
+            border-radius: 8px;
+            margin: 10px 0;
+            overflow: hidden;
+            border: 1px solid var(--code-header-bg);
+        }
+
+        .code-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--code-header-bg);
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .code-block-header button {
+            background: #4a5568;
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .code-block-header button:hover {
+             background: #718096;
+        }
+
         .message pre {
-            background-color: #0d1117;
-            color: #c9d1d9;
+            margin: 0;
             padding: 16px;
-            border-radius: 6px;
             overflow-x: auto;
             white-space: pre;
             font-family: 'Courier New', Courier, monospace;
+            color: #c9d1d9;
         }
 
         .user-msg { background: var(--user-bubble); align-self: flex-end; border-bottom-right-radius: 4px; }
@@ -377,5 +433,3 @@ export default function AIPage() {
     </>
   );
 }
-
-    
