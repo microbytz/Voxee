@@ -20,32 +20,31 @@ export default function ChatPage() {
 
     // --- Core Functions ---
 
-    const appendMessage = (role: string, content: any, tempImageUri?: string | null, tempFileData?: { uri: string | null, name: string | null }) => {
-        setChatHistory(prev => [...prev, { role, content: { text: content, image: tempImageUri, file: tempFileData } }]);
+    const appendMessage = (role: string, content: any) => {
+        setChatHistory(prev => [...prev, { role, content }]);
     };
-
+    
     const handleSend = async (options = {}) => {
         const userText = userInputRef.current?.value || '';
         if (!userText && !imageURI && !fileData.uri) return;
 
-        const messageContent = {
+        const messageContent: { text: string; image: string | null; file: { uri: string | null, name: string | null } } = {
             text: userText,
             image: imageURI,
             file: fileData,
         };
         
-        setChatHistory(prev => [...prev, { role: 'user', content: messageContent }]);
+        appendMessage('user', messageContent);
 
-        const fullHistory = [...chatHistory, { role: 'user', content: { text: userText } }];
-        
-        if (userInputRef.current) {
-            userInputRef.current.value = '';
-        }
-
-        const aiPayload: { messages: any[], output?: string, image?: string, file?: string } = {
-            messages: fullHistory.map(msg => ({ role: msg.role, content: msg.content.text })), // Send only text history to AI
+        const aiPayload: any = {
+            messages: chatHistory.map(msg => ({ 
+                role: msg.role, 
+                content: typeof msg.content === 'string' ? msg.content : msg.content.text 
+            })),
             ...options
         };
+
+        aiPayload.messages.push({ role: 'user', content: userText });
         
         if (imageURI) {
             aiPayload.image = imageURI;
@@ -53,16 +52,19 @@ export default function ChatPage() {
             aiPayload.file = fileData.uri;
         }
         
-        setImageURI(null); // Clear after adding to history
-        setFileData({ uri: null, name: null }); // Clear after adding to history
+        if (userInputRef.current) {
+            userInputRef.current.value = '';
+        }
+        setImageURI(null); 
+        setFileData({ uri: null, name: null });
 
         try {
             const aiResponse = await puter.ai.chat(aiPayload);
             const aiText = aiResponse.toString();
-            setChatHistory(prev => [...prev, { role: 'ai', content: { text: aiText } }]);
+            appendMessage('ai', { text: aiText });
         } catch (error) {
             console.error("Error from AI:", error);
-            setChatHistory(prev => [...prev, { role: 'ai', content: { text: 'Sorry, I encountered an error.' } }]);
+            appendMessage('ai', { text: 'Sorry, I encountered an error.' });
         }
     };
 
@@ -152,7 +154,8 @@ export default function ChatPage() {
             reader.onload = (e) => {
                 const result = e.target?.result as string;
                 setImageURI(result);
-                appendMessage('user', userInputRef.current?.value || `Image attached: ${file.name}`, result, null);
+                const currentText = userInputRef.current?.value || `Image attached: ${file.name}`;
+                appendMessage('user', { text: currentText, image: result, file: { uri: null, name: null } });
             };
             reader.readAsDataURL(file);
         }
@@ -166,7 +169,8 @@ export default function ChatPage() {
                 const result = e.target?.result as string;
                 const fileInfo = { uri: result, name: file.name };
                 setFileData(fileInfo);
-                appendMessage('user', userInputRef.current?.value || `File attached: ${file.name}`, null, fileInfo);
+                const currentText = userInputRef.current?.value || `File attached: ${file.name}`;
+                appendMessage('user', { text: currentText, image: null, file: fileInfo });
             };
             reader.readAsDataURL(file);
         }
@@ -216,6 +220,10 @@ export default function ChatPage() {
     // --- Render ---
 
     const renderMessageContent = (content: any) => {
+        if (typeof content === 'string') {
+            return <span>{content}</span>;
+        }
+
         const text = content.text || '';
         const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
         let lastIndex = 0;
@@ -247,8 +255,8 @@ export default function ChatPage() {
         return (
             <div>
                 {content.image && <img src={content.image} className="preview-image" alt="User upload" />}
-                {content.file && <p>File attached: {content.file.name}</p>}
-                {parts.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>)}
+                {content.file && content.file.name && <p>File attached: {content.file.name}</p>}
+                {parts.length > 0 ? parts.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>) : <span>{text}</span>}
             </div>
         );
     };
@@ -451,5 +459,3 @@ export default function ChatPage() {
         </>
     );
 }
-
-    
