@@ -30,7 +30,13 @@ export default function AIPage() {
 
       try {
         // The payload for puter.ai.chat can be a string, or an object with a file and an optional prompt
-        const payload = fileDataUri ? { file: fileDataUri, prompt: text } : text;
+        let payload : any = text;
+        if(fileDataUri) {
+          payload = { file: fileDataUri, prompt: text };
+        } else if (text.toLowerCase().startsWith('generate image') || text.toLowerCase().startsWith('/imagine')) {
+          payload = { prompt: text, output: 'image' };
+        }
+        
         const response = await global.puter.ai.chat(payload);
         const responseText = String(response); // Ensure response is a string
         
