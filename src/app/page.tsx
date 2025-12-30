@@ -73,7 +73,7 @@ export default function ChatPage() {
         }
 
         const firstUserMessage = chatHistory.find(m => m.role === 'user')?.content.text || 'New Chat';
-        const defaultName = firstUserMessage.substring(0, 30) + '...';
+        const defaultName = firstUserMessage.substring(0, 30);
         
         const fileName = currentChatFile ?
             (await puter.ui.prompt('Enter new name or leave to overwrite:', currentChatFile.name)) :
@@ -86,7 +86,6 @@ export default function ChatPage() {
             let savedFilePath = currentChatFile?.path;
 
             if (currentChatFile && currentChatFile.name !== fileName) {
-                // Rename if name changed
                  await puter.fs.rename(currentChatFile.path, fileName);
                  savedFilePath = currentChatFile.path.replace(currentChatFile.name, fileName);
             }
@@ -109,7 +108,7 @@ export default function ChatPage() {
             setHistoryFiles(files);
         } catch (error) {
             console.error('Error loading history:', error);
-            // Don't show alert, just log it. The UI will show empty state.
+            puter.ui.alert('Error loading history. See console for details.');
         }
     };
 
@@ -153,7 +152,6 @@ export default function ChatPage() {
             reader.onload = (e) => {
                 const result = e.target?.result as string;
                 setImageURI(result);
-                // Preview message
                 appendMessage('user', userInputRef.current?.value || `Image attached: ${file.name}`, result, null);
             };
             reader.readAsDataURL(file);
@@ -168,7 +166,6 @@ export default function ChatPage() {
                 const result = e.target?.result as string;
                 const fileInfo = { uri: result, name: file.name };
                 setFileData(fileInfo);
-                // Preview message
                 appendMessage('user', userInputRef.current?.value || `File attached: ${file.name}`, null, fileInfo);
             };
             reader.readAsDataURL(file);
@@ -190,18 +187,22 @@ export default function ChatPage() {
     // --- Effects ---
 
     useEffect(() => {
+        const handlePuterReady = () => {
+            loadHistory();
+            startNewChat();
+        };
+
         const script = document.createElement('script');
         script.src = "https://js.puter.com/v2/";
-        script.onload = () => {
-            puter.ready(() => {
-                loadHistory();
-                startNewChat();
-            });
-        };
         document.body.appendChild(script);
 
+        window.addEventListener('puter.loaded', handlePuterReady);
+
         return () => {
-            document.body.removeChild(script);
+            if (script.parentNode) {
+                script.parentNode.removeChild(script);
+            }
+            window.removeEventListener('puter.loaded', handlePuterReady);
         }
     }, []);
 
@@ -450,3 +451,5 @@ export default function ChatPage() {
         </>
     );
 }
+
+    
