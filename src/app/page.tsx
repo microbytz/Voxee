@@ -258,7 +258,11 @@ export default function AIPage() {
     global.copyCode = copyCode;
     global.handlePhotoUpload = handlePhotoUpload;
 
-    loadHistory();
+    if (global.puter) {
+      global.puter.ready(() => {
+        loadHistory();
+      });
+    }
 
     const input = document.getElementById('userInput') as HTMLTextAreaElement;
     if(input) {
