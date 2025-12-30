@@ -40,16 +40,17 @@ export default function ChatPage() {
         
         appendMessage('user', messageContent);
 
-        const aiPayload: any[] = chatHistory.map(msg => {
+        const aiPayload = chatHistory.map(msg => {
             const content = msg.content;
-            if (typeof content === 'string') {
-                return { role: msg.role, content };
+            let textContent = '';
+            
+            if(typeof content === 'string') {
+                textContent = content;
+            } else if (typeof content === 'object' && content !== null && content.text) {
+                textContent = content.text;
             }
-            if(content.text && typeof content.text === 'string' && Object.keys(content).length === 1) {
-                return { role: msg.role, content: content.text };
-            }
-            // For complex user messages with images/files, just send the text part.
-            return { role: msg.role, content: content.text || '' };
+
+            return { role: msg.role, content: textContent };
         });
 
         const userMessageForAI: any = {
@@ -77,8 +78,13 @@ export default function ChatPage() {
 
         try {
             const aiResponse = await puter.ai.chat(aiPayload);
-            const aiText = aiResponse.toString();
-            appendMessage('ai', { text: aiText });
+
+            if(typeof aiResponse === 'object' && aiResponse.toString().startsWith('data:image')) {
+                appendMessage('ai', { image: aiResponse.toString() });
+            } else {
+                appendMessage('ai', { text: aiResponse.toString() });
+            }
+
         } catch (error) {
             console.error("Error from AI:", error);
             appendMessage('ai', { text: 'Sorry, I encountered an error.' });
@@ -95,7 +101,7 @@ export default function ChatPage() {
         const defaultName = firstUserMessage.substring(0, 30);
         
         const fileName = currentChatFile ?
-            (await puter.ui.prompt('Enter new name or leave to overwrite:', currentChatFile.name)) :
+            (await puter.ui.prompt('Enter new name or leave to overwrite:', currentChatFile.name.replace('.json',''))) :
             (await puter.ui.prompt('Enter a name for your chat:', defaultName));
 
         if (!fileName) return;
@@ -103,16 +109,17 @@ export default function ChatPage() {
         try {
             const fileContent = JSON.stringify(chatHistory, null, 2);
             let savedFilePath = currentChatFile?.path;
-
-            if (currentChatFile && currentChatFile.name !== fileName) {
-                 await puter.fs.rename(currentChatFile.path, fileName);
-                 savedFilePath = currentChatFile.path.replace(currentChatFile.name, fileName);
+            
+            if (currentChatFile && currentChatFile.name.replace('.json','') !== fileName) {
+                 const newPath = currentChatFile.path.replace(currentChatFile.name, fileName + '.json');
+                 await puter.fs.rename(currentChatFile.path, newPath);
+                 savedFilePath = newPath;
             }
             
             const finalPath = savedFilePath || fileName + '.json';
             const savedFile = await puter.fs.write(finalPath, fileContent);
 
-            setCurrentChatFile(savedFile);
+            setCurrentChatFile({name: fileName + '.json', path: finalPath});
             puter.ui.alert('Chat saved!');
             loadHistory();
         } catch (error) {
@@ -204,17 +211,11 @@ export default function ChatPage() {
         if (window.hasOwnProperty('puter')) {
             handlePuterReady();
         } else {
-            const script = document.createElement('script');
-            script.src = "https://js.puter.com/v2/";
-            document.body.appendChild(script);
-            window.addEventListener('puter.loaded', handlePuterReady);
+            window.addEventListener('puter.loaded', handlePuterReady, { once: true });
+        }
 
-            return () => {
-                if (script.parentNode) {
-                    script.parentNode.removeChild(script);
-                }
-                window.removeEventListener('puter.loaded', handlePuterReady);
-            }
+        return () => {
+            window.removeEventListener('puter.loaded', handlePuterReady);
         }
     }, []);
 
