@@ -2,6 +2,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Save, Paperclip, Camera, Send, PlusCircle } from 'lucide-react';
 
 // Since puter.js is loaded via a script tag, we need to declare it to TypeScript
 declare const puter: any;
@@ -41,14 +45,17 @@ export default function ChatPage() {
             if (typeof content === 'string') {
                 return { role: msg.role, content };
             }
-            // Ensure we are sending a simple text string for AI processing, even for complex messages
+            if(content.text && typeof content.text === 'string' && Object.keys(content).length === 1) {
+                return { role: msg.role, content: content.text };
+            }
+            // For complex user messages with images/files, just send the text part.
             return { role: msg.role, content: content.text || '' };
         });
 
-        const userMessageForAI = {
+        const userMessageForAI: any = {
             role: 'user',
             content: userText,
-        } as { role: string; content: string; image?: string; file?: string; output?: string };
+        };
         
         if (imageURI) {
             userMessageForAI.image = imageURI;
@@ -102,7 +109,7 @@ export default function ChatPage() {
                  savedFilePath = currentChatFile.path.replace(currentChatFile.name, fileName);
             }
             
-            const finalPath = savedFilePath || fileName;
+            const finalPath = savedFilePath || fileName + '.json';
             const savedFile = await puter.fs.write(finalPath, fileContent);
 
             setCurrentChatFile(savedFile);
@@ -117,7 +124,8 @@ export default function ChatPage() {
     const loadHistory = async () => {
         try {
             const files = await puter.fs.readdir('/');
-            setHistoryFiles(files);
+            const chatFiles = files.filter((f: {name: string}) => f.name.endsWith('.json'));
+            setHistoryFiles(chatFiles);
         } catch (error) {
             console.error('Error loading history:', error);
             puter.ui.alert('Error loading history. See console for details.');
@@ -136,19 +144,6 @@ export default function ChatPage() {
         }
     };
     
-    const renameChat = async (file: { name: string, path: string }) => {
-        const newName = await puter.ui.prompt(`Rename '${file.name}':`, file.name);
-        if (newName && newName !== file.name) {
-            try {
-                await puter.fs.rename(file.path, newName);
-                loadHistory(); // Refresh the list
-            } catch (error) {
-                console.error('Error renaming file:', error);
-                puter.ui.alert('Failed to rename chat.');
-            }
-        }
-    };
-
     const startNewChat = () => {
         setChatHistory([{ role: 'ai', content: { text: 'Hello! How can I help you today?' } }]);
         setCurrentChatFile(null);
@@ -206,17 +201,20 @@ export default function ChatPage() {
             startNewChat();
         };
 
-        const script = document.createElement('script');
-        script.src = "https://js.puter.com/v2/";
-        document.body.appendChild(script);
+        if (window.hasOwnProperty('puter')) {
+            handlePuterReady();
+        } else {
+            const script = document.createElement('script');
+            script.src = "https://js.puter.com/v2/";
+            document.body.appendChild(script);
+            window.addEventListener('puter.loaded', handlePuterReady);
 
-        window.addEventListener('puter.loaded', handlePuterReady);
-
-        return () => {
-            if (script.parentNode) {
-                script.parentNode.removeChild(script);
+            return () => {
+                if (script.parentNode) {
+                    script.parentNode.removeChild(script);
+                }
+                window.removeEventListener('puter.loaded', handlePuterReady);
             }
-            window.removeEventListener('puter.loaded', handlePuterReady);
         }
     }, []);
 
@@ -225,7 +223,6 @@ export default function ChatPage() {
             chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
         }
     }, [chatHistory]);
-
 
     // --- Render ---
 
@@ -241,233 +238,114 @@ export default function ChatPage() {
 
         let match;
         while ((match = codeBlockRegex.exec(text)) !== null) {
-            // Text before code block
             if (match.index > lastIndex) {
                 parts.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex, match.index)}</span>);
             }
-            
             const code = match[2];
-            // Code block
             parts.push(
-                <div key={`code-${lastIndex}`} className="code-block-wrapper">
-                    <button className="copy-code-btn" onClick={(e) => copyCode(code, e.target)}>Copy</button>
-                    <pre><code>{code}</code></pre>
+                <div key={`code-${lastIndex}`} className="relative bg-gray-800 rounded-md my-2 p-4 text-sm text-white">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-2 right-2 h-auto px-2 py-1 text-xs"
+                        onClick={(e) => copyCode(code, e.target)}
+                    >
+                        Copy
+                    </Button>
+                    <pre><code className="font-mono">{code}</code></pre>
                 </div>
             );
             lastIndex = match.index + match[0].length;
         }
 
-        // Text after last code block
         if (lastIndex < text.length) {
             parts.push(<span key={`text-${lastIndex}`}>{text.substring(lastIndex)}</span>);
         }
         
         return (
             <div>
-                {content.image && <img src={content.image} className="preview-image" alt="User upload" />}
-                {content.file && content.file.name && <p>File attached: {content.file.name}</p>}
-                {parts.length > 0 ? parts.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>) : <span>{text}</span>}
+                {content.image && <img src={content.image} className="max-w-xs rounded-md my-2" alt="User upload" />}
+                {content.file && content.file.name && <p className="text-sm text-gray-500">File attached: {content.file.name}</p>}
+                {parts.length > 0 ? parts.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>) : <span className="whitespace-pre-wrap">{text}</span>}
             </div>
         );
     };
 
-
     return (
-        <>
-        <style jsx global>{`
-            body {
-                font-family: sans-serif;
-                display: flex;
-                height: 100vh;
-                margin: 0;
-                background-color: #f0f2f5;
-                color: #1c1e21;
-            }
-            #sidebar {
-                width: 250px;
-                border-right: 1px solid #ddd;
-                display: flex;
-                flex-direction: column;
-                background-color: #fff;
-            }
-            #history-list {
-                flex-grow: 1;
-                overflow-y: auto;
-                padding: 10px;
-            }
-            .history-item {
-                padding: 10px;
-                cursor: pointer;
-                border-radius: 6px;
-                margin-bottom: 5px;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }
-            .history-item:hover {
-                background-color: #e9ebee;
-            }
-            #new-chat-button {
-                padding: 15px;
-                border: none;
-                background-color: #42b72a;
-                color: white;
-                font-size: 16px;
-                cursor: pointer;
-                margin: 10px;
-                border-radius: 6px;
-            }
-            #new-chat-button:hover {
-                background-color: #36a420;
-            }
-            #chat-container {
-                flex-grow: 1;
-                display: flex;
-                flex-direction: column;
-            }
-            #chat-window {
-                flex-grow: 1;
-                padding: 20px;
-                overflow-y: auto;
-                display: flex;
-                flex-direction: column;
-                gap: 15px;
-            }
-            .message {
-                max-width: 70%;
-                padding: 10px 15px;
-                border-radius: 18px;
-                line-height: 1.4;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-            }
-            .user-message {
-                background-color: #0084ff;
-                color: white;
-                align-self: flex-end;
-            }
-            .ai-message {
-                background-color: #e4e6eb;
-                color: #050505;
-                align-self: flex-start;
-            }
-            .ai-message pre {
-                background-color: #282c34;
-                color: #abb2bf;
-                padding: 15px;
-                border-radius: 8px;
-                overflow-x: auto;
-                font-family: 'Courier New', Courier, monospace;
-            }
-            #input-area {
-                border-top: 1px solid #ddd;
-                padding: 15px;
-                display: flex;
-                gap: 10px;
-                background-color: #fff;
-            }
-            #user-input {
-                flex-grow: 1;
-                padding: 10px;
-                border: 1px solid #ccc;
-                border-radius: 18px;
-                font-size: 16px;
-            }
-            #input-area button {
-                padding: 10px 15px;
-                border: none;
-                background-color: #0084ff;
-                color: white;
-                border-radius: 18px;
-                cursor: pointer;
-                font-size: 16px;
-            }
-            #input-area button:hover {
-                background-color: #0073e6;
-            }
-            .code-block-wrapper {
-                position: relative;
-                margin-top: 10px;
-            }
-            .copy-code-btn {
-                position: absolute;
-                top: 5px;
-                right: 5px;
-                background-color: #555;
-                color: white;
-                border: none;
-                padding: 3px 8px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 12px;
-                opacity: 0.7;
-            }
-            .copy-code-btn:hover {
-                opacity: 1;
-            }
-            .preview-image {
-                max-width: 100%;
-                max-height: 200px;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-        `}</style>
-        <div id="sidebar">
-            <button id="new-chat-button" onClick={startNewChat}>New Chat</button>
-            <div id="history-list">
-                {historyFiles.length === 0 && <p style={{textAlign: 'center', color: '#888', padding: '10px'}}>No saved chats.</p>}
-                {historyFiles.map(file => {
-                    let longPressTimeout: NodeJS.Timeout;
-                    return (
-                        <div
-                            key={file.path}
-                            className="history-item"
-                            onClick={() => viewChat(file)}
-                            onContextMenu={(e) => {
-                                e.preventDefault();
-                                renameChat(file);
-                            }}
-                            onTouchStart={() => {
-                                longPressTimeout = setTimeout(() => renameChat(file), 500);
-                            }}
-                            onTouchEnd={() => clearTimeout(longPressTimeout)}
-                            onTouchMove={() => clearTimeout(longPressTimeout)}
-                        >
-                            {file.name}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-
-        <div id="chat-container">
-            <div id="chat-window" ref={chatWindowRef}>
-                {chatHistory.map((msg, index) => (
-                    <div key={index} className={`message ${msg.role}-message`}>
-                        {renderMessageContent(msg.content)}
+        <div className="flex h-screen bg-gray-50">
+            <aside className="w-64 flex flex-col border-r bg-white">
+                <div className="p-4 border-b">
+                    <Button className="w-full" onClick={startNewChat}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> New Chat
+                    </Button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2">
+                    <h2 className="px-2 mb-2 text-lg font-semibold tracking-tight">History</h2>
+                    <div className="space-y-1">
+                        {historyFiles.length === 0 && <p className="text-center text-sm text-gray-500 pt-4">No saved chats.</p>}
+                        {historyFiles.map(file => (
+                            <Button
+                                key={file.path}
+                                variant="ghost"
+                                className="w-full justify-start"
+                                onClick={() => viewChat(file)}
+                            >
+                                <span className="truncate">{file.name.replace('.json', '')}</span>
+                            </Button>
+                        ))}
                     </div>
-                ))}
-            </div>
-            <div id="input-area">
-                <input type="text" id="user-input" placeholder="Type your message..." ref={userInputRef} onKeyDown={(e) => e.key === 'Enter' && handleSend()} />
-                <button id="save-button" onClick={saveChat}>💾</button>
-                <button id="file-upload-button" onClick={() => fileInputRef.current?.click()}>📎</button>
-                <button id="photo-button" onClick={() => photoInputRef.current?.click()}>📸</button>
-                <button id="send-button" onClick={() => {
-                    const userInputText = userInputRef.current?.value || '';
-                    let options = {};
-                    if (userInputText.toLowerCase().startsWith('generate image') || userInputText.toLowerCase().startsWith('/imagine')) {
-                        options = { output: 'image' };
-                    }
-                    handleSend(options);
-                }}>Send</button>
-            </div>
+                </div>
+            </aside>
+
+            <main className="flex-1 flex flex-col">
+                <div id="chat-window" ref={chatWindowRef} className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {chatHistory.map((msg, index) => (
+                        <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                            {msg.role === 'ai' && <div className="h-8 w-8 rounded-full bg-gray-300 flex-shrink-0"></div>}
+                            <div className={`p-3 rounded-lg max-w-xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-gray-100'}`}>
+                                {renderMessageContent(msg.content)}
+                            </div>
+                            {msg.role === 'user' && <div className="h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0">U</div>}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="p-4 border-t bg-white">
+                    <div className="relative">
+                        <Input
+                            id="user-input"
+                            placeholder="Type your message..."
+                            ref={userInputRef}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                            className="pr-40"
+                        />
+                        <div className="absolute inset-y-0 right-2 flex items-center space-x-2">
+                            <Button variant="ghost" size="icon" onClick={saveChat} title="Save Chat">
+                                <Save className="h-5 w-5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} title="Upload File">
+                                <Paperclip className="h-5 w-5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => photoInputRef.current?.click()} title="Upload Photo">
+                                <Camera className="h-5 w-5" />
+                            </Button>
+                            <Button onClick={() => {
+                                const userInputText = userInputRef.current?.value || '';
+                                let options = {};
+                                if (userInputText.toLowerCase().startsWith('generate image') || userInputText.toLowerCase().startsWith('/imagine')) {
+                                    options = { output: 'image' };
+                                }
+                                handleSend(options);
+                            }} title="Send Message">
+                                <Send className="h-5 w-5" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+            
+            <input type="file" id="file-input" style={{ display: 'none' }} ref={fileInputRef} onChange={handleFileUpload} />
+            <input type="file" id="photo-input" style={{ display: 'none' }} accept="image/*" ref={photoInputRef} onChange={handleImageUpload} />
         </div>
-        
-        <input type="file" id="file-input" style={{ display: 'none' }} ref={fileInputRef} onChange={handleFileUpload} />
-        <input type="file" id="photo-input" style={{ display: 'none' }} accept="image/*" ref={photoInputRef} onChange={handleImageUpload} />
-        </>
     );
 }
-
-    
