@@ -1,629 +1,460 @@
-
-'use client';
-
-import {useEffect} from 'react';
-
-export default function AIPage() {
-  useEffect(() => {
-    const global = window as any;
-    global.chatHistory = [];
-
-    const handleSend = async (fileDataUri?: string) => {
-      const input = document.getElementById('userInput') as HTMLTextAreaElement;
-      if (!input) return;
-
-      const text = input.value.trim();
-      if (!text && !fileDataUri) return;
-
-      if (text) {
-        appendMessage('user', text);
-      }
-      
-      // If a file is being sent, the user message is the file itself.
-      // The text from the input will be sent as a separate user message if it exists.
-      if (!fileDataUri) {
-         global.chatHistory.push({ role: 'user', content: text });
-      }
-      
-      input.value = '';
-      input.style.height = 'auto';
-
-      try {
-        // The payload for puter.ai.chat can be a string, or an object with a file and an optional prompt
-        let payload : any = text;
-        if(fileDataUri) {
-          payload = { file: fileDataUri, prompt: text };
-        } else if (text.toLowerCase().startsWith('generate image') || text.toLowerCase().startsWith('/imagine')) {
-          payload = { prompt: text, output: 'image' };
-        }
-        
-        const response = await global.puter.ai.chat(payload);
-        const responseText = String(response); // Ensure response is a string
-        
-        appendMessage('ai', responseText);
-        global.chatHistory.push({ role: 'ai', content: responseText });
-
-        // If a file was sent AND there was text, add the text to history *after* the AI's response.
-        if(fileDataUri && text){
-           const fileMessageIndex = global.chatHistory.findIndex((m: any) => m.content === fileDataUri);
-           if (fileMessageIndex > -1) {
-             global.chatHistory.splice(fileMessageIndex + 1, 0, { role: 'user', content: text });
-           }
-        }
-
-      } catch (err: any) {
-        const errorMessage = 'Error: ' + err.message;
-        appendMessage('ai', errorMessage);
-        global.chatHistory.push({ role: 'ai', content: errorMessage });
-      }
-    };
-
-    const appendMessage = (role: 'user' | 'ai', content: any) => {
-      const chatWindow = document.getElementById('chat-window');
-      if (!chatWindow) return;
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'message-wrapper';
-
-      const label = role === 'user' ? 'You' : 'Assistant';
-      const msgClass = role === 'user' ? 'user-msg' : 'ai-msg';
-      
-      let contentHtml;
-      // Ensure content is a string before trying to manipulate it
-      const safeContent = String(content);
-      
-      if (safeContent.startsWith('data:image')) {
-          contentHtml = `<img src="${safeContent}" alt="User upload" style="max-width: 100%; border-radius: 10px;" />`;
-      } else if (safeContent.startsWith('data:')) {
-          contentHtml = `<div class="file-attachment">📄 File Attached</div>`
-      } else {
-          // Escape HTML to prevent injection, then format for display
-          const escapedText = safeContent
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-          
-          // Find and format code blocks
-          contentHtml = escapedText.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-              const codeId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-              // The code inside is already escaped, so we can use it directly
-              const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              return `<div class="code-block-wrapper">
-                        <div class="code-block-header">
-                            <span>${lang || 'code'}</span>
-                            <button onclick="copyCode('${codeId}', this)">Copy</button>
-                        </div>
-                        <pre><code id="${codeId}">${escapedCode}</code></pre>
-                      </div>`;
-          }).replace(/\n/g, '<br>'); // Finally, convert newlines to <br> for non-code text
-      }
-
-
-      wrapper.innerHTML = `
-        <div class="msg-label" style="${
-          role === 'user' ? 'align-self: flex-end;' : ''
-        }">${label}</div>
-        <div class="message ${msgClass}">${contentHtml}</div>
-      `;
-
-      chatWindow.appendChild(wrapper);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-    };
-
-    const saveCurrentChat = async () => {
-      if (global.chatHistory.length === 0) return alert('Nothing to save yet!');
-      const fileName = `Chat_${Date.now()}.json`;
-      try {
-        // Save the structured chat history
-        const chatJson = JSON.stringify(global.chatHistory, null, 2);
-        await global.puter.fs.write(fileName, chatJson);
-        alert('Saved to cloud!');
-        loadHistory();
-      } catch (e: any) {
-        alert('Save failed: ' + e.message);
-      }
-    };
-
-    const loadHistory = async () => {
-        const list = document.getElementById('historyList');
-        if (!list) return;
-
-        try {
-            const items = await global.puter.fs.readdir('./');
-            const chats = items.filter((f: any) => f.name.startsWith('Chat_') && f.name.endsWith('.json'));
-            
-            list.innerHTML = ''; // Clear the list first
-
-            if (chats.length === 0) {
-                list.innerHTML = "<div class='history-item' style='cursor: default; color: var(--text-dim);'>No saved chats.</div>";
-                return;
-            }
-            
-            // Sort by timestamp descending
-            chats.sort((a:any, b:any) => parseInt(b.name.split('_')[1]) - parseInt(a.name.split('_')[1]));
-
-
-            chats.forEach((f: any) => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                
-                const nameParts = f.name.replace('.json', '').split('_');
-                const timestamp = parseInt(nameParts[1]);
-                // If there's a custom name part, use it, otherwise use the date
-                let displayName = new Date(timestamp).toLocaleString();
-                if (nameParts.length > 2) {
-                    displayName = nameParts.slice(2).join('_').replace(/_/g, ' ');
-                }
-                
-                div.innerHTML = `📄 ${displayName}`;
-                div.onclick = () => viewChat(f.name);
-
-                // Add right-click event listener for renaming
-                div.addEventListener('contextmenu', (e) => {
-                    e.preventDefault(); // Prevent the default context menu
-                    handleRename(div, f.name);
-                });
-
-                list.appendChild(div);
-            });
-        } catch (e) {
-            list.innerText = 'Error loading history.';
-        }
-    };
-
-    const handleRename = (div: HTMLElement, currentName: string) => {
-        const nameParts = currentName.replace('.json', '').split('_');
-        const originalTimestamp = nameParts[1];
-        const currentCustomName = nameParts.length > 2 ? nameParts.slice(2).join('_').replace(/_/g, ' ') : '';
-    
-        div.innerHTML = `📄 <input type="text" value="${currentCustomName}" class="rename-input" />`;
-        const input = div.querySelector('.rename-input') as HTMLInputElement;
-        input.focus();
-        input.select();
-    
-        const saveRename = async () => {
-            const newName = input.value.trim();
-            if (newName && newName !== currentCustomName) {
-                const finalNewName = `Chat_${originalTimestamp}_${newName.replace(/ /g, '_')}.json`;
-                try {
-                    await global.puter.fs.rename(currentName, finalNewName);
-                } catch (err: any) {
-                    alert(`Rename failed: ${err.message}`);
-                }
-            }
-            // Always refresh history to revert the input field or show the new name
-            loadHistory();
-        };
-    
-        input.addEventListener('blur', saveRename);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                saveRename();
-            } else if (e.key === 'Escape') {
-                loadHistory(); // Revert by reloading
-            }
-        });
-    };
-
-
-    const viewChat = async (name: string) => {
-      const chatWindow = document.getElementById('chat-window');
-      if (!chatWindow) return;
-      chatWindow.innerHTML = ''; // Clear current chat view
-
-      try {
-        const blob = await global.puter.fs.read(name);
-        const text = await blob.text();
-        const savedHistory = JSON.parse(text);
-        
-        global.chatHistory = savedHistory; // Load it into the current session
-
-        // Re-render messages from the saved history
-        savedHistory.forEach((msg: {role: 'user' | 'ai', content: string}) => {
-            appendMessage(msg.role, msg.content);
-        });
-
-      } catch (e) {
-        alert('Error reading or parsing file.');
-        newChat(); // Reset to a clean state if loading fails
-      }
-    };
-
-    const newChat = () => {
-        const chatWindow = document.getElementById('chat-window');
-        if (chatWindow) {
-            chatWindow.innerHTML = `
-                <div class="message-wrapper">
-                    <div class="msg-label">System</div>
-                    <div class="message ai-msg">
-                        Hello! Ask me anything. Your conversations are saved to your private Puter cloud.
-                    </div>
-                </div>
-            `;
-        }
-        global.chatHistory = []; // Reset the history array
-    };
-    
-    // Function to handle code copying
-    const copyCode = (codeId: string, buttonElement: HTMLButtonElement) => {
-        const codeElement = document.getElementById(codeId);
-        if (codeElement) {
-            navigator.clipboard.writeText(codeElement.innerText).then(() => {
-                buttonElement.innerText = 'Copied!';
-                setTimeout(() => {
-                    buttonElement.innerText = 'Copy';
-                }, 2000); // Revert back to 'Copy' after 2 seconds
-            }).catch(err => {
-                console.error('Failed to copy code: ', err);
-                alert('Failed to copy code.');
-            });
-        }
-    };
-
-    // Generic file handler
-    const handleFileUpload = (event: Event, isImage: boolean) => {
-        const input = event.target as HTMLInputElement;
-        const file = input.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUri = e.target?.result as string;
-            // Display the uploaded item in the chat
-            appendMessage('user', dataUri); 
-            // Add it to the history
-            global.chatHistory.push({ role: 'user', content: dataUri });
-            // Send it to the AI
-            handleSend(dataUri);
-        };
-        reader.readAsDataURL(file);
-    };
-
-
-    // Make functions globally accessible
-    global.handleSend = handleSend;
-    global.saveCurrentChat = saveCurrentChat;
-    global.viewChat = viewChat;
-    global.newChat = newChat;
-    global.copyCode = copyCode;
-    global.handleFileUpload = handleFileUpload;
-
-    // Wait for Puter to be ready before loading history
-    if (global.puter) {
-      global.puter.ready(() => {
-        loadHistory();
-      });
-    }
-
-    // Event listener for the main text input
-    const input = document.getElementById('userInput') as HTMLTextAreaElement;
-    if(input) {
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-            }
-        });
-    }
-
-    // Event listener for the generic file input
-    const fileInput = document.getElementById('fileInput');
-    if (fileInput) {
-        fileInput.addEventListener('change', (e) => handleFileUpload(e, false));
-    }
-    
-    // Event listener for the photo input
-    const photoInput = document.getElementById('photoInput');
-    if (photoInput) {
-        photoInput.addEventListener('change', (e) => handleFileUpload(e, true));
-    }
-  }, []);
-
-  return (
-    <>
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        :root {
-            --bg-dark: #0b0e11;
-            --sidebar-bg: #15191e;
-            --chat-bg: #0b0e11;
-            --user-bubble: #2b5aed;
-            --ai-bubble: #1e2329;
-            --text-main: #e9eaeb;
-            --text-dim: #9ca3af;
-            --accent: #3b82f6;
-            --code-bg: #0d1117; /* GitHub-like dark background for code */
-            --code-header-bg: #2d343c;
-        }
-
-        html, body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-main);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puter Chat</title>
+    <script src="https://js.puter.com/v2/"></script>
+    <style>
+        body {
+            font-family: sans-serif;
             display: flex;
             height: 100vh;
             margin: 0;
-            overflow: hidden;
+            background-color: #f0f2f5;
+            color: #1c1e21;
         }
-
-        /* Sidebar */
         #sidebar {
-            width: 280px;
-            background: var(--sidebar-bg);
-            border-right: 1px solid #2d343c;
+            width: 250px;
+            border-right: 1px solid #ddd;
             display: flex;
             flex-direction: column;
-            padding: 20px 0;
+            background-color: #fff;
         }
-
-        .sidebar-header { padding: 0 20px 20px; border-bottom: 1px solid #2d343c; margin-bottom: 10px; font-weight: bold; color: var(--accent); }
-        
-        .new-chat-btn {
-            display: block;
-            width: calc(100% - 40px);
-            margin: 0 20px 10px;
-            padding: 12px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            text-align: center;
-            transition: background 0.2s;
+        #history-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
         }
-
-        .new-chat-btn:hover {
-            background: #2563eb;
-        }
-
-        #historyList { flex: 1; overflow-y: auto; padding: 0 10px; }
-
         .history-item {
-            padding: 12px 15px;
-            border-radius: 8px;
+            padding: 10px;
             cursor: pointer;
-            font-size: 13px;
+            border-radius: 6px;
             margin-bottom: 5px;
-            transition: 0.2s;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            color: var(--text-dim);
         }
-        
-        .history-item:hover { background: #2d343c; color: white; }
-
-        .rename-input {
-            background: #2d343c;
+        .history-item:hover {
+            background-color: #e9ebee;
+        }
+        #new-chat-button {
+            padding: 15px;
+            border: none;
+            background-color: #42b72a;
             color: white;
-            border: 1px solid var(--accent);
-            border-radius: 4px;
-            padding: 2px 5px;
-            font-size: 13px;
-            outline: none;
-            width: calc(100% - 25px); /* Adjust width to fit inside the history item */
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            border-radius: 6px;
         }
-
-        /* Main Chat Area */
-        #main-container {
-            flex: 1;
+        #new-chat-button:hover {
+            background-color: #36a420;
+        }
+        #chat-container {
+            flex-grow: 1;
             display: flex;
             flex-direction: column;
-            position: relative;
         }
-
         #chat-window {
-            flex: 1;
+            flex-grow: 1;
+            padding: 20px;
             overflow-y: auto;
-            padding: 40px 20px 150px;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            gap: 15px;
         }
-
-        .message-wrapper { width: 100%; max-width: 800px; margin-bottom: 25px; display: flex; flex-direction: column; }
-
         .message {
-            max-width: 85%;
-            padding: 14px 18px;
+            max-width: 70%;
+            padding: 10px 15px;
             border-radius: 18px;
-            font-size: 15px;
-            line-height: 1.6;
+            line-height: 1.4;
+        }
+        .user-message {
+            background-color: #0084ff;
+            color: white;
+            align-self: flex-end;
+        }
+        .ai-message {
+            background-color: #e4e6eb;
+            color: #050505;
+            align-self: flex-start;
+        }
+        .ai-message pre {
+            background-color: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
             word-wrap: break-word;
         }
-        
-        .file-attachment {
-          font-style: italic;
-          color: var(--text-dim);
-        }
-
-        /* Code Block Styling */
-        .code-block-wrapper {
-            background-color: var(--code-bg);
-            border-radius: 8px;
-            margin: 10px 0;
-            overflow: hidden;
-            border: 1px solid var(--code-header-bg);
-            position: relative; /* For positioning the copy button */
-        }
-
-        .code-block-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: var(--code-header-bg);
-            padding: 6px 12px;
-            font-size: 12px;
-            color: var(--text-dim);
-        }
-
-        .code-block-header button {
-            background: #4a5568;
-            color: white;
-            border: none;
-            padding: 4px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            position: absolute;
-            top: 6px;
-            right: 12px;
-        }
-        .code-block-header button:hover {
-             background: #718096;
-        }
-
-        .message pre {
-            margin: 0;
-            padding: 16px;
-            padding-top: 40px; /* Space for the header */
-            overflow-x: auto;
-            white-space: pre; /* Important for preserving whitespace */
-            font-family: 'Courier New', Courier, monospace;
-            color: #c9d1d9; /* Light grey text for code */
-        }
-
-        .user-msg { background: var(--user-bubble); align-self: flex-end; border-bottom-right-radius: 4px; }
-
-        .ai-msg { background: var(--ai-bubble); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #2d343c; }
-
-        .msg-label { font-size: 11px; margin-bottom: 6px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-
-        /* Input Area */
         #input-area {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(transparent, var(--bg-dark) 30%);
-            padding: 40px 20px;
+            border-top: 1px solid #ddd;
+            padding: 15px;
             display: flex;
-            justify-content: center;
+            gap: 10px;
+            background-color: #fff;
         }
-
-        .input-wrapper {
-            width: 100%;
-            max-width: 800px;
-            background: #1e2329;
-            border: 1px solid #3e454d;
-            border-radius: 12px;
-            display: flex;
-            align-items: flex-end;
+        #user-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 18px;
+            font-size: 16px;
+        }
+        #input-area button {
             padding: 10px 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-
-        textarea {
-            flex: 1;
-            background: transparent;
             border: none;
+            background-color: #0084ff;
             color: white;
-            padding: 8px;
-            resize: none;
-            font-size: 15px;
-            outline: none;
+            border-radius: 18px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #input-area button:hover {
+            background-color: #0073e6;
+        }
+        .code-block-wrapper {
+            position: relative;
+        }
+        .copy-code-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        .copy-code-btn:hover {
+            opacity: 1;
+        }
+        .preview-image {
+            max-width: 100%;
             max-height: 200px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <button id="new-chat-button">New Chat</button>
+        <div id="history-list"></div>
+    </div>
+
+    <div id="chat-container">
+        <div id="chat-window"></div>
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Type your message...">
+            <button id="save-button">💾</button>
+            <button id="file-upload-button">📎</button>
+            <button id="photo-button">📸</button>
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+    
+    <input type="file" id="file-input" style="display: none;" />
+    <input type="file" id="photo-input" style="display: none;" accept="image/*" />
+
+
+    <script>
+        const chatWindow = document.getElementById('chat-window');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const saveButton = document.getElementById('save-button');
+        const historyList = document.getElementById('history-list');
+        const newChatButton = document.getElementById('new-chat-button');
+        const photoButton = document.getElementById('photo-button');
+        const photoInput = document.getElementById('photo-input');
+        const fileUploadButton = document.getElementById('file-upload-button');
+        const fileInput = document.getElementById('file-input');
+
+        let chatHistory = [];
+        let currentChatFile = null;
+        let imageURI = null;
+        let fileData = { uri: null, name: null };
+        
+        // --- Core Functions ---
+
+        function appendMessage(role, content) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', role === 'user' ? 'user-message' : 'ai-message');
+
+            // Sanitize content to prevent HTML injection
+            const sanitizedContent = content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+            const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+            let lastIndex = 0;
+            let htmlContent = '';
+
+            let match;
+            while ((match = codeBlockRegex.exec(sanitizedContent)) !== null) {
+                // Add text before the code block
+                htmlContent += match.input.substring(lastIndex, match.index).replace(/\n/g, '<br>');
+                
+                const lang = match[1];
+                const code = match[2];
+                const codeId = `code-${Date.now()}-${Math.random()}`;
+
+                // Add the code block with a wrapper and copy button
+                htmlContent += `
+                    <div class="code-block-wrapper">
+                        <button class="copy-code-btn" onclick="copyCode('${codeId}')">Copy</button>
+                        <pre><code id="${codeId}">${code}</code></pre>
+                    </div>
+                `;
+                lastIndex = match.index + match[0].length;
+            }
+
+            // Add any remaining text after the last code block
+            htmlContent += sanitizedContent.substring(lastIndex).replace(/\n/g, '<br>');
+
+            messageElement.innerHTML = htmlContent;
+            
+            // Check for image URI and append image if it exists
+            if (role === 'user' && imageURI) {
+                const imgElement = document.createElement('img');
+                imgElement.src = imageURI;
+                imgElement.classList.add('preview-image');
+                imgElement.alt = 'User uploaded image';
+                messageElement.prepend(imgElement); // Add image before the text content
+            }
+            
+            // Handle general file uploads
+            if (role === 'user' && fileData.uri) {
+                const fileInfoElement = document.createElement('p');
+                fileInfoElement.textContent = `File attached: ${fileData.name}`;
+                messageElement.prepend(fileInfoElement);
+            }
+
+            chatWindow.appendChild(messageElement);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
         }
 
-        .btn-group { display: flex; gap: 8px; padding-bottom: 4px; }
-
-        button {
-            padding: 8px 16px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: 0.2s;
+        window.copyCode = function(elementId) {
+            const codeElement = document.getElementById(elementId);
+            const textToCopy = codeElement.innerText;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const button = codeElement.closest('.code-block-wrapper').querySelector('.copy-code-btn');
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy code: ', err);
+            });
         }
         
-        .icon-btn {
-            background: #2d343c;
-            color: var(--text-dim);
-            padding: 8px;
+        async function handleSend(options = {}) {
+            const userText = userInput.value;
+            if (!userText && !imageURI && !fileData.uri) return;
+
+            appendMessage('user', userText);
+            chatHistory.push({ role: 'user', content: userText });
+            
+            userInput.value = '';
+            
+            const aiPayload = {
+                messages: chatHistory,
+                ...options
+            };
+            
+             if (imageURI) {
+                aiPayload.image = imageURI;
+            } else if (fileData.uri) {
+                aiPayload.file = fileData.uri;
+            }
+
+            try {
+                const aiResponse = await puter.ai.chat(aiPayload);
+                const aiText = aiResponse.toString();
+                appendMessage('ai', aiText);
+                chatHistory.push({ role: 'ai', content: aiText });
+            } catch (error) {
+                console.error("Error from AI:", error);
+                appendMessage('ai', 'Sorry, I encountered an error.');
+            } finally {
+                imageURI = null; // Clear after sending
+                fileData = { uri: null, name: null }; // Clear after sending
+            }
         }
-        .icon-btn:hover {
-            background: #3e454d;
-            color: white;
+        
+        async function saveChat() {
+            if (chatHistory.length === 0) {
+                puter.ui.alert('Chat is empty. Nothing to save.');
+                return;
+            }
+
+            const defaultName = chatHistory[0].content.substring(0, 30) + '...';
+            const fileName = currentChatFile ?
+                (await puter.ui.prompt('Enter new name or leave to overwrite:', currentChatFile.name)) :
+                (await puter.ui.prompt('Enter a name for your chat:', defaultName));
+
+            if (!fileName) return;
+
+            try {
+                const fileContent = JSON.stringify(chatHistory, null, 2);
+                if (currentChatFile && currentChatFile.name !== fileName) {
+                    await puter.fs.rename(currentChatFile.path, fileName);
+                }
+                const savedFile = await puter.fs.write(fileName, fileContent);
+                currentChatFile = savedFile;
+                puter.ui.alert('Chat saved!');
+                loadHistory();
+            } catch (error) {
+                console.error('Error saving chat:', error);
+                puter.ui.alert('Error saving chat. See console for details.');
+            }
         }
 
-        .send-btn { background: var(--accent); color: white; }
-        .save-btn { background: #2d343c; color: var(--text-dim); }
-        .send-btn:hover { background: #2563eb; }
-        .save-btn:hover { background: #3e454d; color: white; }
-        `,
-        }}
-      />
-      {/* Hidden file inputs */}
-      <input type="file" id="fileInput" style={{ display: 'none' }} />
-      <input type="file" id="photoInput" accept="image/*" style={{ display: 'none' }} />
+        async function loadHistory() {
+            try {
+                const files = await puter.fs.readdir('/');
+                historyList.innerHTML = ''; // Clear existing list
+                
+                let timeout = null;
+                files.forEach(file => {
+                    const item = document.createElement('div');
+                    item.textContent = file.name;
+                    item.className = 'history-item';
+                    item.onclick = () => viewChat(file);
+                    
+                    // Right-click for desktop
+                    item.addEventListener('contextmenu', e => {
+                        e.preventDefault();
+                        renameChat(file);
+                    });
 
-      <div id="sidebar">
-        <div className="sidebar-header">☁️ Cloud History</div>
-        <button className="new-chat-btn" onClick={() => (window as any).newChat()}>+ New Chat</button>
-        <div id="historyList">Loading...</div>
-      </div>
+                    // Long-press for touch devices
+                    item.addEventListener('touchstart', e => {
+                        timeout = setTimeout(() => {
+                           e.preventDefault();
+                           renameChat(file);
+                        }, 500); // 500ms for long press
+                    });
 
-      <div id="main-container">
-        <div id="chat-window">
-          <div className="message-wrapper">
-            <div className="msg-label">System</div>
-            <div className="message ai-msg">
-              Hello! Ask me anything. Your conversations are saved to your
-              private Puter cloud.
-            </div>
-          </div>
-        </div>
+                    item.addEventListener('touchend', () => {
+                        clearTimeout(timeout);
+                    });
+                     item.addEventListener('touchmove', () => {
+                        clearTimeout(timeout);
+                    });
 
-        <div id="input-area">
-          <div className="input-wrapper">
-            <textarea
-              id="userInput"
-              placeholder="Ask AI..."
-              rows={1}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = '';
-                target.style.height = target.scrollHeight + 'px';
-              }}
-            ></textarea>
-            <div className="btn-group">
-              <button
-                className="save-btn"
-                onClick={() => (window as any).saveCurrentChat()}
-                title="Save session"
-              >
-                💾
-              </button>
-              <button
-                className="icon-btn"
-                onClick={() => (document.getElementById('fileInput') as HTMLInputElement).click()}
-                title="Upload File"
-              >
-                📎
-              </button>
-              <button
-                className="icon-btn"
-                onClick={() => (document.getElementById('photoInput') as HTMLInputElement).click()}
-                title="Send Photo"
-              >
-                📸
-              </button>
-              <button
-                className="send-btn"
-                onClick={() => (window as any).handleSend()}
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
+                    historyList.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Error loading history:', error);
+                historyList.innerHTML = 'Error loading history.';
+            }
+        }
 
-    
+        async function viewChat(file) {
+            try {
+                const content = await puter.fs.read(file.path);
+                chatWindow.innerHTML = '';
+                chatHistory = JSON.parse(content);
+                chatHistory.forEach(msg => appendMessage(msg.role, msg.content));
+                currentChatFile = file;
+            } catch (error) {
+                console.error('Error viewing chat:', error);
+                puter.ui.alert('Error loading chat.');
+            }
+        }
+        
+        async function renameChat(file) {
+            const newName = await puter.ui.prompt(`Rename '${file.name}':`, file.name);
+            if (newName && newName !== file.name) {
+                try {
+                    await puter.fs.rename(file.path, newName);
+                    loadHistory(); // Refresh the list
+                } catch (error) {
+                    console.error('Error renaming file:', error);
+                    puter.ui.alert('Failed to rename chat.');
+                }
+            }
+        }
+
+        function startNewChat() {
+            chatWindow.innerHTML = '';
+            chatHistory = [];
+            currentChatFile = null;
+            imageURI = null;
+            fileData = { uri: null, name: null };
+            userInput.value = '';
+            appendMessage('ai', 'Hello! How can I help you today?');
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imageURI = e.target.result;
+                    appendMessage('user', userInput.value || `Image attached: ${file.name}`);
+                    // Don't send yet, allow user to add text and press send
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        function handleFileUpload(event) {
+             const file = event.target.files[0];
+             if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    fileData.uri = e.target.result;
+                    fileData.name = file.name;
+                    appendMessage('user', userInput.value || `File attached: ${file.name}`);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        sendButton.addEventListener('click', () => handleSend());
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                handleSend();
+            }
+        });
+        
+        document.getElementById('send-button').addEventListener('click', () => {
+            const userInputText = userInput.value;
+            let options = {};
+            
+            if (userInputText.toLowerCase().startsWith('generate image') || userInputText.toLowerCase().startsWith('/imagine')) {
+                options = { output: 'image' };
+            }
+            
+            handleSend(options);
+        });
+
+        saveButton.addEventListener('click', saveChat);
+        newChatButton.addEventListener('click', startNewChat);
+
+        photoButton.addEventListener('click', () => photoInput.click());
+        photoInput.addEventListener('change', handleImageUpload);
+        
+        fileUploadButton.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileUpload);
+        
+
+        // --- Initial Load ---
+        
+        puter.ready(() => {
+            loadHistory();
+            startNewChat();
+        });
+
+    </script>
+</body>
+</html>
