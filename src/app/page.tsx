@@ -36,21 +36,31 @@ export default function ChatPage() {
         
         appendMessage('user', messageContent);
 
-        const aiPayload: any = {
-            messages: chatHistory.map(msg => ({ 
-                role: msg.role, 
-                content: typeof msg.content === 'string' ? msg.content : msg.content.text 
-            })),
-            ...options
-        };
+        const aiPayload: any[] = chatHistory.map(msg => {
+            const content = msg.content;
+            if (typeof content === 'string') {
+                return { role: msg.role, content };
+            }
+            // Ensure we are sending a simple text string for AI processing, even for complex messages
+            return { role: msg.role, content: content.text || '' };
+        });
 
-        aiPayload.messages.push({ role: 'user', content: userText });
+        const userMessageForAI = {
+            role: 'user',
+            content: userText,
+        } as { role: string; content: string; image?: string; file?: string; output?: string };
         
         if (imageURI) {
-            aiPayload.image = imageURI;
+            userMessageForAI.image = imageURI;
         } else if (fileData.uri) {
-            aiPayload.file = fileData.uri;
+            userMessageForAI.file = fileData.uri;
         }
+
+        if (options && 'output' in options) {
+            userMessageForAI.output = 'image';
+        }
+
+        aiPayload.push(userMessageForAI);
         
         if (userInputRef.current) {
             userInputRef.current.value = '';
@@ -459,3 +469,5 @@ export default function ChatPage() {
         </>
     );
 }
+
+    
