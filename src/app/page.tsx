@@ -17,14 +17,18 @@ export default function AIPage() {
 
       if (text) {
         appendMessage('user', text);
-        global.chatHistory.push({ role: 'user', content: text });
+        // Don't add to history here if a file is also being sent,
+        // handleSend will be called again with the file data.
+        if (!fileDataUri) {
+          global.chatHistory.push({ role: 'user', content: text });
+        }
       }
       
       input.value = '';
       input.style.height = 'auto';
 
       try {
-        const payload = fileDataUri ? { image: fileDataUri, prompt: text } : text;
+        const payload = fileDataUri ? { file: fileDataUri, prompt: text } : text;
         const response = await global.puter.ai.chat(payload);
         const responseText = String(response); // Ensure response is a string
         
@@ -32,8 +36,13 @@ export default function AIPage() {
         global.chatHistory.push({ role: 'ai', content: responseText });
 
         if(fileDataUri){
-           // If an image was sent, we stored it as a user message already
-           // so no need to add again to history.
+           const fileMessageIndex = global.chatHistory.findIndex((m: any) => m.content === fileDataUri);
+           if (fileMessageIndex > -1) {
+             // If there was also text, add it to the history now.
+             if (text) {
+                global.chatHistory.splice(fileMessageIndex + 1, 0, { role: 'user', content: text });
+             }
+           }
         }
 
       } catch (err: any) {
@@ -58,6 +67,8 @@ export default function AIPage() {
       
       if (safeContent.startsWith('data:image')) {
           contentHtml = `<img src="${safeContent}" alt="User upload" style="max-width: 100%; border-radius: 10px;" />`;
+      } else if (safeContent.startsWith('data:')) {
+          contentHtml = `<div class="file-attachment">📄 File Attached</div>`
       } else {
           const escapedText = safeContent
             .replace(/&/g, '&amp;')
@@ -235,7 +246,7 @@ export default function AIPage() {
         }
     };
 
-    const handlePhotoUpload = (event: Event) => {
+    const handleFileUpload = (event: Event) => {
         const input = event.target as HTMLInputElement;
         const file = input.files?.[0];
         if (!file) return;
@@ -256,7 +267,7 @@ export default function AIPage() {
     global.viewChat = viewChat;
     global.newChat = newChat;
     global.copyCode = copyCode;
-    global.handlePhotoUpload = handlePhotoUpload;
+    global.handleFileUpload = handleFileUpload;
 
     if (global.puter) {
       global.puter.ready(() => {
@@ -274,9 +285,9 @@ export default function AIPage() {
         });
     }
 
-    const photoInput = document.getElementById('photoInput');
-    if (photoInput) {
-        photoInput.addEventListener('change', handlePhotoUpload);
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+        fileInput.addEventListener('change', handleFileUpload);
     }
   }, []);
 
@@ -395,6 +406,11 @@ export default function AIPage() {
             word-wrap: break-word;
         }
         
+        .file-attachment {
+          font-style: italic;
+          color: var(--text-dim);
+        }
+
         .code-block-wrapper {
             background-color: var(--code-bg);
             border-radius: 8px;
@@ -510,7 +526,7 @@ export default function AIPage() {
         `,
         }}
       />
-      <input type="file" id="photoInput" accept="image/*" style={{ display: 'none' }} />
+      <input type="file" id="fileInput" style={{ display: 'none' }} />
       <div id="sidebar">
         <div className="sidebar-header">☁️ Cloud History</div>
         <button className="new-chat-btn" onClick={() => (window as any).newChat()}>+ New Chat</button>
@@ -550,10 +566,10 @@ export default function AIPage() {
               </button>
               <button
                 className="icon-btn"
-                onClick={() => (document.getElementById('photoInput') as HTMLInputElement).click()}
-                title="Send Photo"
+                onClick={() => (document.getElementById('fileInput') as HTMLInputElement).click()}
+                title="Send File"
               >
-                📸
+                📎
               </button>
               <button
                 className="send-btn"
