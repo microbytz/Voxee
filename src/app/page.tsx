@@ -26,8 +26,10 @@ export default function AIPage() {
       try {
         const payload = fileDataUri ? { image: fileDataUri, prompt: text } : text;
         const response = await global.puter.ai.chat(payload);
-        appendMessage('ai', response);
-        global.chatHistory.push({ role: 'ai', content: response });
+        const responseText = String(response); // Ensure response is a string
+        
+        appendMessage('ai', responseText);
+        global.chatHistory.push({ role: 'ai', content: responseText });
 
         if(fileDataUri){
            // If an image was sent, we stored it as a user message already
@@ -561,5 +563,4 @@ export default function AIPage() {
       </div>
     </>
   );
-
-    
+}
