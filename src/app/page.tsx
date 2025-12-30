@@ -6,7 +6,7 @@ import {useEffect} from 'react';
 export default function AIPage() {
   useEffect(() => {
     const global = window as any;
-    global.fullTranscript = '';
+    global.chatHistory = [];
 
     const handleSend = async (fileDataUri?: string) => {
       const input = document.getElementById('userInput') as HTMLTextAreaElement;
@@ -17,6 +17,7 @@ export default function AIPage() {
 
       if (text) {
         appendMessage('user', text);
+        global.chatHistory.push({ role: 'user', content: text });
       }
       
       input.value = '';
@@ -26,13 +27,17 @@ export default function AIPage() {
         const payload = fileDataUri ? { image: fileDataUri, prompt: text } : text;
         const response = await global.puter.ai.chat(payload);
         appendMessage('ai', response);
+        global.chatHistory.push({ role: 'ai', content: response });
 
-        const transcriptText = text ? `User: ${text}\n` : '';
-        const transcriptImage = fileDataUri ? `User uploaded an image.\n` : '';
-        global.fullTranscript += `${transcriptText}${transcriptImage}AI: ${response}\n\n`;
+        if(fileDataUri){
+           // If an image was sent, we stored it as a user message already
+           // so no need to add again to history.
+        }
 
       } catch (err: any) {
-        appendMessage('ai', 'Error: ' + err.message);
+        const errorMessage = 'Error: ' + err.message;
+        appendMessage('ai', errorMessage);
+        global.chatHistory.push({ role: 'ai', content: errorMessage });
       }
     };
 
@@ -47,12 +52,12 @@ export default function AIPage() {
       const msgClass = role === 'user' ? 'user-msg' : 'ai-msg';
       
       let contentHtml;
+      const safeContent = String(content);
       
-      if (typeof content === 'string' && content.startsWith('data:image')) {
-          contentHtml = `<img src="${content}" alt="User upload" style="max-width: 100%; border-radius: 10px;" />`;
+      if (safeContent.startsWith('data:image')) {
+          contentHtml = `<img src="${safeContent}" alt="User upload" style="max-width: 100%; border-radius: 10px;" />`;
       } else {
-          const safeText = String(content);
-          const escapedText = safeText
+          const escapedText = safeContent
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -85,10 +90,11 @@ export default function AIPage() {
     };
 
     const saveCurrentChat = async () => {
-      if (!global.fullTranscript) return alert('Nothing to save yet!');
-      const fileName = `Chat_${Date.now()}.txt`;
+      if (global.chatHistory.length === 0) return alert('Nothing to save yet!');
+      const fileName = `Chat_${Date.now()}.json`;
       try {
-        await global.puter.fs.write(fileName, global.fullTranscript);
+        const chatJson = JSON.stringify(global.chatHistory, null, 2);
+        await global.puter.fs.write(fileName, chatJson);
         alert('Saved to cloud!');
         loadHistory();
       } catch (e: any) {
@@ -102,7 +108,7 @@ export default function AIPage() {
 
         try {
             const items = await global.puter.fs.readdir('./');
-            const chats = items.filter((f: any) => f.name.startsWith('Chat_'));
+            const chats = items.filter((f: any) => f.name.startsWith('Chat_') && f.name.endsWith('.json'));
             
             list.innerHTML = ''; // Clear the list first
 
@@ -118,7 +124,7 @@ export default function AIPage() {
                 const div = document.createElement('div');
                 div.className = 'history-item';
                 
-                const nameParts = f.name.replace('.txt', '').split('_');
+                const nameParts = f.name.replace('.json', '').split('_');
                 const timestamp = parseInt(nameParts[1]);
                 let displayName = new Date(timestamp).toLocaleString();
                 if (nameParts.length > 2) {
@@ -141,7 +147,7 @@ export default function AIPage() {
     };
 
     const handleRename = (div: HTMLElement, currentName: string) => {
-        const nameParts = currentName.replace('.txt', '').split('_');
+        const nameParts = currentName.replace('.json', '').split('_');
         const originalTimestamp = nameParts[1];
         const currentCustomName = nameParts.length > 2 ? nameParts.slice(2).join('_').replace(/_/g, ' ') : '';
     
@@ -153,7 +159,7 @@ export default function AIPage() {
         const saveRename = async () => {
             const newName = input.value.trim();
             if (newName && newName !== currentCustomName) {
-                const finalNewName = `Chat_${originalTimestamp}_${newName.replace(/ /g, '_')}.txt`;
+                const finalNewName = `Chat_${originalTimestamp}_${newName.replace(/ /g, '_')}.json`;
                 try {
                     await global.puter.fs.rename(currentName, finalNewName);
                 } catch (err: any) {
@@ -178,20 +184,22 @@ export default function AIPage() {
     const viewChat = async (name: string) => {
       const chatWindow = document.getElementById('chat-window');
       if (!chatWindow) return;
+      chatWindow.innerHTML = ''; // Clear current chat view
 
       try {
         const blob = await global.puter.fs.read(name);
         const text = await blob.text();
-        const escapedText = text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+        const savedHistory = JSON.parse(text);
+        
+        global.chatHistory = savedHistory; // Load it into the current session
 
-        chatWindow.innerHTML = `<div class="message-wrapper"><div class="message ai-msg" style="white-space:pre-wrap">${escapedText}</div></div>`;
+        savedHistory.forEach((msg: {role: 'user' | 'ai', content: string}) => {
+            appendMessage(msg.role, msg.content);
+        });
+
       } catch (e) {
-        alert('Error reading file.');
+        alert('Error reading or parsing file.');
+        newChat(); // Reset to a clean state if loading fails
       }
     };
 
@@ -207,7 +215,7 @@ export default function AIPage() {
                 </div>
             `;
         }
-        global.fullTranscript = "";
+        global.chatHistory = [];
     };
     
     const copyCode = (codeId: string, buttonElement: HTMLButtonElement) => {
@@ -234,6 +242,7 @@ export default function AIPage() {
         reader.onload = (e) => {
             const dataUri = e.target?.result as string;
             appendMessage('user', dataUri);
+            global.chatHistory.push({ role: 'user', content: dataUri });
             handleSend(dataUri);
         };
         reader.readAsDataURL(file);
@@ -552,4 +561,5 @@ export default function AIPage() {
       </div>
     </>
   );
-}
+
+    
