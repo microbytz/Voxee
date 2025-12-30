@@ -17,17 +17,19 @@ export default function AIPage() {
 
       if (text) {
         appendMessage('user', text);
-        // Don't add to history here if a file is also being sent,
-        // handleSend will be called again with the file data.
-        if (!fileDataUri) {
-          global.chatHistory.push({ role: 'user', content: text });
-        }
+      }
+      
+      // If a file is being sent, the user message is the file itself.
+      // The text from the input will be sent as a separate user message if it exists.
+      if (!fileDataUri) {
+         global.chatHistory.push({ role: 'user', content: text });
       }
       
       input.value = '';
       input.style.height = 'auto';
 
       try {
+        // The payload for puter.ai.chat can be a string, or an object with a file and an optional prompt
         const payload = fileDataUri ? { file: fileDataUri, prompt: text } : text;
         const response = await global.puter.ai.chat(payload);
         const responseText = String(response); // Ensure response is a string
@@ -35,13 +37,11 @@ export default function AIPage() {
         appendMessage('ai', responseText);
         global.chatHistory.push({ role: 'ai', content: responseText });
 
-        if(fileDataUri){
+        // If a file was sent AND there was text, add the text to history *after* the AI's response.
+        if(fileDataUri && text){
            const fileMessageIndex = global.chatHistory.findIndex((m: any) => m.content === fileDataUri);
            if (fileMessageIndex > -1) {
-             // If there was also text, add it to the history now.
-             if (text) {
-                global.chatHistory.splice(fileMessageIndex + 1, 0, { role: 'user', content: text });
-             }
+             global.chatHistory.splice(fileMessageIndex + 1, 0, { role: 'user', content: text });
            }
         }
 
@@ -63,6 +63,7 @@ export default function AIPage() {
       const msgClass = role === 'user' ? 'user-msg' : 'ai-msg';
       
       let contentHtml;
+      // Ensure content is a string before trying to manipulate it
       const safeContent = String(content);
       
       if (safeContent.startsWith('data:image')) {
@@ -70,6 +71,7 @@ export default function AIPage() {
       } else if (safeContent.startsWith('data:')) {
           contentHtml = `<div class="file-attachment">📄 File Attached</div>`
       } else {
+          // Escape HTML to prevent injection, then format for display
           const escapedText = safeContent
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -77,8 +79,10 @@ export default function AIPage() {
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
           
+          // Find and format code blocks
           contentHtml = escapedText.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
               const codeId = `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              // The code inside is already escaped, so we can use it directly
               const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
               return `<div class="code-block-wrapper">
                         <div class="code-block-header">
@@ -87,7 +91,7 @@ export default function AIPage() {
                         </div>
                         <pre><code id="${codeId}">${escapedCode}</code></pre>
                       </div>`;
-          }).replace(/\n/g, '<br>');
+          }).replace(/\n/g, '<br>'); // Finally, convert newlines to <br> for non-code text
       }
 
 
@@ -106,6 +110,7 @@ export default function AIPage() {
       if (global.chatHistory.length === 0) return alert('Nothing to save yet!');
       const fileName = `Chat_${Date.now()}.json`;
       try {
+        // Save the structured chat history
         const chatJson = JSON.stringify(global.chatHistory, null, 2);
         await global.puter.fs.write(fileName, chatJson);
         alert('Saved to cloud!');
@@ -130,6 +135,7 @@ export default function AIPage() {
                 return;
             }
             
+            // Sort by timestamp descending
             chats.sort((a:any, b:any) => parseInt(b.name.split('_')[1]) - parseInt(a.name.split('_')[1]));
 
 
@@ -139,6 +145,7 @@ export default function AIPage() {
                 
                 const nameParts = f.name.replace('.json', '').split('_');
                 const timestamp = parseInt(nameParts[1]);
+                // If there's a custom name part, use it, otherwise use the date
                 let displayName = new Date(timestamp).toLocaleString();
                 if (nameParts.length > 2) {
                     displayName = nameParts.slice(2).join('_').replace(/_/g, ' ');
@@ -147,8 +154,9 @@ export default function AIPage() {
                 div.innerHTML = `📄 ${displayName}`;
                 div.onclick = () => viewChat(f.name);
 
+                // Add right-click event listener for renaming
                 div.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
+                    e.preventDefault(); // Prevent the default context menu
                     handleRename(div, f.name);
                 });
 
@@ -179,7 +187,7 @@ export default function AIPage() {
                     alert(`Rename failed: ${err.message}`);
                 }
             }
-            // Always refresh history to revert the input field
+            // Always refresh history to revert the input field or show the new name
             loadHistory();
         };
     
@@ -206,6 +214,7 @@ export default function AIPage() {
         
         global.chatHistory = savedHistory; // Load it into the current session
 
+        // Re-render messages from the saved history
         savedHistory.forEach((msg: {role: 'user' | 'ai', content: string}) => {
             appendMessage(msg.role, msg.content);
         });
@@ -228,9 +237,10 @@ export default function AIPage() {
                 </div>
             `;
         }
-        global.chatHistory = [];
+        global.chatHistory = []; // Reset the history array
     };
     
+    // Function to handle code copying
     const copyCode = (codeId: string, buttonElement: HTMLButtonElement) => {
         const codeElement = document.getElementById(codeId);
         if (codeElement) {
@@ -238,7 +248,7 @@ export default function AIPage() {
                 buttonElement.innerText = 'Copied!';
                 setTimeout(() => {
                     buttonElement.innerText = 'Copy';
-                }, 2000);
+                }, 2000); // Revert back to 'Copy' after 2 seconds
             }).catch(err => {
                 console.error('Failed to copy code: ', err);
                 alert('Failed to copy code.');
@@ -246,7 +256,8 @@ export default function AIPage() {
         }
     };
 
-    const handleFileUpload = (event: Event) => {
+    // Generic file handler
+    const handleFileUpload = (event: Event, isImage: boolean) => {
         const input = event.target as HTMLInputElement;
         const file = input.files?.[0];
         if (!file) return;
@@ -254,14 +265,18 @@ export default function AIPage() {
         const reader = new FileReader();
         reader.onload = (e) => {
             const dataUri = e.target?.result as string;
-            appendMessage('user', dataUri);
+            // Display the uploaded item in the chat
+            appendMessage('user', dataUri); 
+            // Add it to the history
             global.chatHistory.push({ role: 'user', content: dataUri });
+            // Send it to the AI
             handleSend(dataUri);
         };
         reader.readAsDataURL(file);
     };
 
 
+    // Make functions globally accessible
     global.handleSend = handleSend;
     global.saveCurrentChat = saveCurrentChat;
     global.viewChat = viewChat;
@@ -269,12 +284,14 @@ export default function AIPage() {
     global.copyCode = copyCode;
     global.handleFileUpload = handleFileUpload;
 
+    // Wait for Puter to be ready before loading history
     if (global.puter) {
       global.puter.ready(() => {
         loadHistory();
       });
     }
 
+    // Event listener for the main text input
     const input = document.getElementById('userInput') as HTMLTextAreaElement;
     if(input) {
         input.addEventListener('keydown', (e) => {
@@ -285,9 +302,16 @@ export default function AIPage() {
         });
     }
 
+    // Event listener for the generic file input
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
-        fileInput.addEventListener('change', handleFileUpload);
+        fileInput.addEventListener('change', (e) => handleFileUpload(e, false));
+    }
+    
+    // Event listener for the photo input
+    const photoInput = document.getElementById('photoInput');
+    if (photoInput) {
+        photoInput.addEventListener('change', (e) => handleFileUpload(e, true));
     }
   }, []);
 
@@ -305,7 +329,7 @@ export default function AIPage() {
             --text-main: #e9eaeb;
             --text-dim: #9ca3af;
             --accent: #3b82f6;
-            --code-bg: #0d1117;
+            --code-bg: #0d1117; /* GitHub-like dark background for code */
             --code-header-bg: #2d343c;
         }
 
@@ -375,7 +399,7 @@ export default function AIPage() {
             padding: 2px 5px;
             font-size: 13px;
             outline: none;
-            width: calc(100% - 25px);
+            width: calc(100% - 25px); /* Adjust width to fit inside the history item */
         }
 
         /* Main Chat Area */
@@ -411,13 +435,14 @@ export default function AIPage() {
           color: var(--text-dim);
         }
 
+        /* Code Block Styling */
         .code-block-wrapper {
             background-color: var(--code-bg);
             border-radius: 8px;
             margin: 10px 0;
             overflow: hidden;
             border: 1px solid var(--code-header-bg);
-            position: relative;
+            position: relative; /* For positioning the copy button */
         }
 
         .code-block-header {
@@ -449,11 +474,11 @@ export default function AIPage() {
         .message pre {
             margin: 0;
             padding: 16px;
-            padding-top: 40px;
+            padding-top: 40px; /* Space for the header */
             overflow-x: auto;
-            white-space: pre;
+            white-space: pre; /* Important for preserving whitespace */
             font-family: 'Courier New', Courier, monospace;
-            color: #c9d1d9;
+            color: #c9d1d9; /* Light grey text for code */
         }
 
         .user-msg { background: var(--user-bubble); align-self: flex-end; border-bottom-right-radius: 4px; }
@@ -526,7 +551,10 @@ export default function AIPage() {
         `,
         }}
       />
+      {/* Hidden file inputs */}
       <input type="file" id="fileInput" style={{ display: 'none' }} />
+      <input type="file" id="photoInput" accept="image/*" style={{ display: 'none' }} />
+
       <div id="sidebar">
         <div className="sidebar-header">☁️ Cloud History</div>
         <button className="new-chat-btn" onClick={() => (window as any).newChat()}>+ New Chat</button>
@@ -567,9 +595,16 @@ export default function AIPage() {
               <button
                 className="icon-btn"
                 onClick={() => (document.getElementById('fileInput') as HTMLInputElement).click()}
-                title="Send File"
+                title="Upload File"
               >
                 📎
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => (document.getElementById('photoInput') as HTMLInputElement).click()}
+                title="Send Photo"
+              >
+                📸
               </button>
               <button
                 className="send-btn"
@@ -584,3 +619,5 @@ export default function AIPage() {
     </>
   );
 }
+
+    
