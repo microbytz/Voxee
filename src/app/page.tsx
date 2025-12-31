@@ -4,7 +4,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Save, Paperclip, Camera, Send, PlusCircle } from 'lucide-react';
 
 // Since puter.js is loaded via a script tag, we need to declare it to TypeScript
@@ -66,12 +66,6 @@ export default function ChatPage() {
         } else if (fileData.uri) {
             userMessageForAI.content = `The user has attached a file named ${fileData.name}. The file content is: ${fileData.uri}. The user's message is: ${userText}`;
         }
-
-        if (options && 'output' in options) {
-            userMessageForAI.output = 'image';
-        }
-
-        aiPayload.push(userMessageForAI);
         
         if (userInputRef.current) {
             userInputRef.current.value = '';
@@ -88,7 +82,8 @@ export default function ChatPage() {
                 appendMessage('ai', { text: aiResponse.toString() });
             }
 
-        } catch (error) {
+        } catch (error)
+        {
             console.error("Error from AI:", error);
             appendMessage('ai', { text: 'Sorry, I encountered an error.' });
         }
@@ -120,7 +115,7 @@ export default function ChatPage() {
             }
             
             const finalPath = savedFilePath || fileName + '.json';
-            const savedFile = await puter.fs.write(finalPath, fileContent);
+            await puter.fs.write(finalPath, fileContent);
 
             setCurrentChatFile({name: fileName + '.json', path: finalPath});
             puter.ui.alert('Chat saved!');
@@ -168,7 +163,6 @@ export default function ChatPage() {
             reader.onload = (e) => {
                 const result = e.target?.result as string;
                 setImageURI(result);
-                // Do not append a user message here, wait for send
             };
             reader.readAsDataURL(file);
         }
@@ -182,7 +176,6 @@ export default function ChatPage() {
                 const result = e.target?.result as string;
                 const fileInfo = { uri: result, name: file.name };
                 setFileData(fileInfo);
-                 // Do not append a user message here, wait for send
             };
             reader.readAsDataURL(file);
         }
@@ -341,14 +334,7 @@ export default function ChatPage() {
                             <Button variant="ghost" size="icon" onClick={() => photoInputRef.current?.click()} title="Upload Photo">
                                 <Camera className="h-5 w-5" />
                             </Button>
-                            <Button onClick={() => {
-                                const userInputText = userInputRef.current?.value || '';
-                                let options = {};
-                                if (userInputText.toLowerCase().startsWith('generate image') || userInputText.toLowerCase().startsWith('/imagine')) {
-                                    options = { output: 'image' };
-                                }
-                                handleSend(options);
-                            }} title="Send Message">
+                            <Button onClick={() => handleSend()} title="Send Message">
                                 <Send className="h-5 w-5" />
                             </Button>
                         </div>
@@ -361,7 +347,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
-
-    
