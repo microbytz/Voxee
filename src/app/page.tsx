@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,16 +11,16 @@ import { Save, Paperclip, Camera, Send, PlusCircle } from 'lucide-react';
 declare const puter: any;
 
 export default function ChatPage() {
-    const [chatHistory, setChatHistory] = useState<{ role: string, content: any }[]>([]);
-    const [historyFiles, setHistoryFiles] = useState<{ name: string, path: string }[]>([]);
-    const [currentChatFile, setCurrentChatFile] = useState<{ name: string, path: string } | null>(null);
-    const [imageURI, setImageURI] = useState<string | null>(null);
-    const [fileData, setFileData] = useState<{ uri: string | null, name: string | null }>({ uri: null, name: null });
+    const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any }[]>([]);
+    const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
+    const [currentChatFile, setCurrentChatFile] = React.useState<{ name: string, path: string } | null>(null);
+    const [imageURI, setImageURI] = React.useState<string | null>(null);
+    const [fileData, setFileData] = React.useState<{ uri: string | null, name: string | null }>({ uri: null, name: null });
 
-    const chatWindowRef = useRef<HTMLDivElement>(null);
-    const userInputRef = useRef<HTMLInputElement>(null);
-    const photoInputRef = useRef<HTMLInputElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const chatWindowRef = React.useRef<HTMLDivElement>(null);
+    const userInputRef = React.useRef<HTMLInputElement>(null);
+    const photoInputRef = React.useRef<HTMLInputElement>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // --- Core Functions ---
 
@@ -59,9 +59,12 @@ export default function ChatPage() {
         };
         
         if (imageURI) {
-            userMessageForAI.image = imageURI;
+            userMessageForAI.content = [
+                { type: 'text', text: userText },
+                { type: 'image_url', image_url: { url: imageURI } }
+            ]
         } else if (fileData.uri) {
-            userMessageForAI.file = fileData.uri;
+            userMessageForAI.content = `The user has attached a file named ${fileData.name}. The file content is: ${fileData.uri}. The user's message is: ${userText}`;
         }
 
         if (options && 'output' in options) {
@@ -135,7 +138,6 @@ export default function ChatPage() {
             setHistoryFiles(chatFiles);
         } catch (error) {
             console.error('Error loading history:', error);
-            puter.ui.alert('Error loading history. See console for details.');
         }
     };
 
@@ -166,8 +168,7 @@ export default function ChatPage() {
             reader.onload = (e) => {
                 const result = e.target?.result as string;
                 setImageURI(result);
-                const currentText = userInputRef.current?.value || `Image attached: ${file.name}`;
-                appendMessage('user', { text: currentText, image: result, file: { uri: null, name: null } });
+                // Do not append a user message here, wait for send
             };
             reader.readAsDataURL(file);
         }
@@ -181,8 +182,7 @@ export default function ChatPage() {
                 const result = e.target?.result as string;
                 const fileInfo = { uri: result, name: file.name };
                 setFileData(fileInfo);
-                const currentText = userInputRef.current?.value || `File attached: ${file.name}`;
-                appendMessage('user', { text: currentText, image: null, file: fileInfo });
+                 // Do not append a user message here, wait for send
             };
             reader.readAsDataURL(file);
         }
@@ -202,7 +202,7 @@ export default function ChatPage() {
 
     // --- Effects ---
 
-    useEffect(() => {
+    React.useEffect(() => {
         const handlePuterReady = () => {
             loadHistory();
             startNewChat();
@@ -219,7 +219,7 @@ export default function ChatPage() {
         }
     }, []);
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (chatWindowRef.current) {
             chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
         }
@@ -265,7 +265,7 @@ export default function ChatPage() {
         
         return (
             <div>
-                {content.image && <img src={content.image} className="max-w-xs rounded-md my-2" alt="User upload" />}
+                {content.image && <img src={content.image} className="max-w-xs rounded-md my-2" alt="Upload" />}
                 {content.file && content.file.name && <p className="text-sm text-gray-500">File attached: {content.file.name}</p>}
                 {parts.length > 0 ? parts.map((part, i) => <React.Fragment key={i}>{part}</React.Fragment>) : <span className="whitespace-pre-wrap">{text}</span>}
             </div>
@@ -309,7 +309,18 @@ export default function ChatPage() {
                             {msg.role === 'user' && <div className="h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0">U</div>}
                         </div>
                     ))}
+                    {(imageURI || (fileData && fileData.name)) && (
+                        <div className="flex justify-end">
+                            <Card className="max-w-xl">
+                                <CardContent className="p-3">
+                                {imageURI && <img src={imageURI} className="max-w-xs rounded-md" alt="Preview" />}
+                                {fileData && fileData.name && <p className="text-sm text-gray-500">File ready: {fileData.name}</p>}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
                 </div>
+
 
                 <div className="p-4 border-t bg-white">
                     <div className="relative">
@@ -350,3 +361,7 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
+
+    
