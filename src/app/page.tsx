@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, LogIn } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 // Since puter.js and marked.js are loaded via script tags, we need to declare them to TypeScript
@@ -13,6 +14,7 @@ declare const puter: any;
 declare const marked: any;
 
 export default function ChatPage() {
+    const [isLoggedIn, setIsLoggedIn] = React.useState(false);
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any }[]>([]);
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
     const [currentAgent, setCurrentAgent] = React.useState<string>('gpt-5-nano');
@@ -47,25 +49,23 @@ export default function ChatPage() {
 
         try {
             const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
+            const newHistory = [...chatHistory, {role: 'user', content: userText}, {role: 'ai', content: aiResponse}];
             addMessage('ai', aiResponse);
             
             // Auto-save chat
-            const transcript = [...aiPayload, { role: 'ai', content: aiResponse }]
-              .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`)
-              .join('\n\n');
-            
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify([...chatHistory, {role: 'user', content: userText}, {role: 'ai', content: aiResponse}], null, 2));
+            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(newHistory, null, 2));
             loadHistory(); // Refresh history list
 
         } catch (error) {
             console.error("Error from AI:", error);
-            addMessage('ai', 'Sorry, I encountered an error: ' + error.message);
+            addMessage('ai', 'Sorry, I encountered an error: ' + (error.message || 'Unknown error'));
         } finally {
             setStatus('Ready');
         }
     };
 
     const loadHistory = async () => {
+        if (!isLoggedIn) return;
         try {
             const files = await puter.fs.readdir('/');
             const chatFiles = files
@@ -93,12 +93,37 @@ export default function ChatPage() {
         if(userInputRef.current) userInputRef.current.value = '';
     };
 
+    const handleLogin = async () => {
+        try {
+            await puter.auth.login();
+        } catch (error) {
+            console.error('Login failed:', error);
+        }
+    }
+
     // --- Effects ---
 
     React.useEffect(() => {
-        const handlePuterReady = () => {
-            loadHistory();
-            startNewChat();
+        const handlePuterReady = async () => {
+            const loggedIn = await puter.auth.isLoggedIn();
+            setIsLoggedIn(loggedIn);
+
+            if (loggedIn) {
+                loadHistory();
+                startNewChat();
+            }
+
+            puter.auth.on('login', () => {
+                setIsLoggedIn(true);
+                loadHistory();
+                startNewChat();
+            });
+
+            puter.auth.on('logout', () => {
+                setIsLoggedIn(false);
+                setChatHistory([]);
+                setHistoryFiles([]);
+            });
         };
 
         if (window.hasOwnProperty('puter')) {
@@ -110,13 +135,17 @@ export default function ChatPage() {
         return () => {
             window.removeEventListener('puter.loaded', handlePuterReady);
         }
-    }, []);
+    }, [isLoggedIn]);
 
     React.useEffect(() => {
         if (chatWindowRef.current) {
             chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
         }
     }, [chatHistory]);
+
+    React.useEffect(() => {
+        loadHistory();
+    }, [isLoggedIn]);
 
     // --- Render ---
 
@@ -128,6 +157,24 @@ export default function ChatPage() {
         const html = marked.parse(content);
         return <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
     };
+
+    if (!isLoggedIn) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center bg-background">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Welcome to Infinity AI</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="mb-4 text-muted-foreground">Please log in to continue.</p>
+                        <Button className="w-full" onClick={handleLogin}>
+                            <LogIn className="mr-2 h-4 w-4" /> Login with Puter
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
 
     return (
         <div className="flex h-screen bg-background text-foreground">
