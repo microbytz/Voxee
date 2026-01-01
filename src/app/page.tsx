@@ -44,7 +44,16 @@ export default function ChatPage() {
         try {
             const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
 
-            const responseText = aiResponse?.message?.content;
+            let responseText;
+
+            // Handle different response structures from different models
+            if (typeof aiResponse === 'object' && aiResponse !== null && aiResponse.message && typeof aiResponse.message.content === 'string') {
+                // Works for gpt-5-nano
+                responseText = aiResponse.message.content;
+            } else if (typeof aiResponse === 'string') {
+                // Fallback for models that return a direct string
+                responseText = aiResponse;
+            }
 
             if (!responseText) {
                  throw new Error(`The AI returned a response in an unexpected format: ${JSON.stringify(aiResponse)}`);
@@ -73,7 +82,7 @@ export default function ChatPage() {
               .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); // Sort descending
             setHistoryFiles(chatFiles);
         } catch (error: any) {
-            console.error('Error loading history:', error.message || error);
+            console.error('Error loading history:', error);
         }
     };
 
