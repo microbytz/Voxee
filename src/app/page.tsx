@@ -14,7 +14,6 @@ declare const puter: any;
 declare const marked: any;
 
 export default function ChatPage() {
-    const [isLoggedIn, setIsLoggedIn] = React.useState(false);
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any }[]>([]);
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
     const [currentAgent, setCurrentAgent] = React.useState<string>('gpt-5-nano');
@@ -41,12 +40,6 @@ export default function ChatPage() {
 
         setStatus('Thinking...');
 
-        const aiPayload = chatHistory.map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
-        aiPayload.push({ role: 'user', content: userText });
-
         try {
             const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
             const newHistory = [...chatHistory, {role: 'user', content: userText}, {role: 'ai', content: aiResponse}];
@@ -65,7 +58,6 @@ export default function ChatPage() {
     };
 
     const loadHistory = async () => {
-        if (!isLoggedIn) return;
         try {
             const files = await puter.fs.readdir('/');
             const chatFiles = files
@@ -93,37 +85,12 @@ export default function ChatPage() {
         if(userInputRef.current) userInputRef.current.value = '';
     };
 
-    const handleLogin = async () => {
-        try {
-            await puter.auth.login();
-        } catch (error) {
-            console.error('Login failed:', error);
-        }
-    }
-
     // --- Effects ---
 
     React.useEffect(() => {
         const handlePuterReady = async () => {
-            const loggedIn = await puter.auth.isLoggedIn();
-            setIsLoggedIn(loggedIn);
-
-            if (loggedIn) {
-                loadHistory();
-                startNewChat();
-            }
-
-            puter.auth.on('login', () => {
-                setIsLoggedIn(true);
-                loadHistory();
-                startNewChat();
-            });
-
-            puter.auth.on('logout', () => {
-                setIsLoggedIn(false);
-                setChatHistory([]);
-                setHistoryFiles([]);
-            });
+            startNewChat();
+            loadHistory();
         };
 
         if (window.hasOwnProperty('puter')) {
@@ -135,17 +102,13 @@ export default function ChatPage() {
         return () => {
             window.removeEventListener('puter.loaded', handlePuterReady);
         }
-    }, [isLoggedIn]);
+    }, []);
 
     React.useEffect(() => {
         if (chatWindowRef.current) {
             chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
         }
     }, [chatHistory]);
-
-    React.useEffect(() => {
-        loadHistory();
-    }, [isLoggedIn]);
 
     // --- Render ---
 
@@ -157,24 +120,6 @@ export default function ChatPage() {
         const html = marked.parse(content);
         return <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
     };
-
-    if (!isLoggedIn) {
-        return (
-            <div className="flex h-screen w-screen items-center justify-center bg-background">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Welcome to Infinity AI</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="mb-4 text-muted-foreground">Please log in to continue.</p>
-                        <Button className="w-full" onClick={handleLogin}>
-                            <LogIn className="mr-2 h-4 w-4" /> Login with Puter
-                        </Button>
-                    </CardContent>
-                </Card>
-            </div>
-        )
-    }
 
     return (
         <div className="flex h-screen bg-background text-foreground">
