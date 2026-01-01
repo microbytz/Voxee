@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 // Since puter.js and marked.js are loaded via script tags, we need to declare them to TypeScript
 declare const puter: any;
@@ -18,9 +19,14 @@ export default function ChatPage() {
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
     const [currentAgent, setCurrentAgent] = React.useState<string>('gpt-5-nano');
     const [status, setStatus] = React.useState<string>('Ready');
+    const [hasCameraPermission, setHasCameraPermission] = React.useState<boolean | null>(null);
+    const [showCamera, setShowCamera] = React.useState(false);
+    const [capturedImage, setCapturedImage] = React.useState<string | null>(null);
 
     const chatWindowRef = React.useRef<HTMLDivElement>(null);
     const userInputRef = React.useRef<HTMLInputElement>(null);
+    const videoRef = React.useRef<HTMLVideoElement>(null);
+    const streamRef = React.useRef<MediaStream | null>(null);
 
     // --- Core Functions ---
 
@@ -30,36 +36,35 @@ export default function ChatPage() {
     
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
-        if (!userText) return;
+        if (!userText && !capturedImage) return;
+
+        const messageContent = [];
+        if(userText) messageContent.push(userText);
+        if(capturedImage) messageContent.push({ type: 'image', data: capturedImage });
 
         const newHistoryWithUser = [...chatHistory, { role: 'user', content: userText }];
         setChatHistory(newHistoryWithUser);
 
-        if (userInputRef.current) {
-            userInputRef.current.value = '';
-        }
+        if (userInputRef.current) userInputRef.current.value = '';
+        setCapturedImage(null);
 
         setStatus('Thinking...');
 
         try {
-            const aiResponse = await puter.ai.chat(userText, { model: currentAgent, max_tokens: 4096 });
+            const aiResponse = await puter.ai.chat(messageContent, { model: currentAgent, max_tokens: 4096 });
 
             let responseText;
             
-            // This is the structure for GPT-5 Nano and some others
             if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 responseText = aiResponse.message.content;
             } 
-            // This is the structure for Gemini
             else if (typeof aiResponse === 'string') {
                 responseText = aiResponse;
             }
-            // This is the structure for Claude, Llama, etc.
             else if (Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
                 responseText = aiResponse[0].text;
             }
             else {
-                // If we get here, the format is unknown. Display the raw response for debugging.
                 throw new Error("The AI returned a response in an unexpected format: " + JSON.stringify(aiResponse));
             }
 
@@ -67,7 +72,7 @@ export default function ChatPage() {
             
             const finalHistoryForSave = [...newHistoryWithUser, { role: 'ai', content: responseText }];
             await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
-            loadHistory(); // Refresh history list
+            loadHistory(); 
 
         } catch (error: any) {
             console.error("Error from AI:", error);
@@ -83,7 +88,7 @@ export default function ChatPage() {
             const files = await puter.fs.readdir('/');
             const chatFiles = files
               .filter((f: {name: string}) => f.name.startsWith('Chat_') && f.name.endsWith('.json'))
-              .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); // Sort descending
+              .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); 
             setHistoryFiles(chatFiles);
         } catch (error: any) {
             console.error('Error loading history:', error);
@@ -104,13 +109,67 @@ export default function ChatPage() {
     const startNewChat = () => {
         setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
         if(userInputRef.current) userInputRef.current.value = '';
+        setCapturedImage(null);
+    };
+
+    // --- Camera Functions ---
+    const getCameraPermission = async () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setHasCameraPermission(true);
+        setShowCamera(true);
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+      }
+    };
+
+    const handleCameraClick = () => {
+        if(hasCameraPermission === false){
+            // If permission was denied, don't try again, just show the alert
+            return;
+        }
+        if (showCamera) {
+            setShowCamera(false);
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
+            }
+        } else {
+            getCameraPermission();
+        }
+    }
+
+    const takePicture = () => {
+        if (videoRef.current) {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            const context = canvas.getContext('2d');
+            if(context){
+                context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                const dataUri = canvas.toDataURL('image/jpeg');
+                setCapturedImage(dataUri);
+            }
+            setShowCamera(false);
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
+            }
+        }
     };
 
     // --- Effects ---
 
     React.useEffect(() => {
         const handlePuterReady = async () => {
-            // This will prompt for login if not already logged in
             await puter.auth.getUser(); 
             startNewChat();
             loadHistory(); 
@@ -124,6 +183,9 @@ export default function ChatPage() {
 
         return () => {
             window.removeEventListener('puter.loaded', handlePuterReady);
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
         }
     }, []);
 
@@ -202,15 +264,45 @@ export default function ChatPage() {
                 </div>
 
                 <div className="p-4 border-t border-border bg-background/80 backdrop-blur-sm">
+                    {showCamera && (
+                        <div className="max-w-3xl mx-auto mb-4 p-4 border rounded-lg bg-secondary/30">
+                            <video ref={videoRef} className="w-full aspect-video rounded-md" autoPlay muted />
+                            <div className="flex justify-end gap-2 mt-2">
+                                 <Button onClick={handleCameraClick} variant="ghost" size="sm">Cancel</Button>
+                                 <Button onClick={takePicture} size="sm">Take Picture</Button>
+                            </div>
+                        </div>
+                     )}
+                     {hasCameraPermission === false && (
+                         <div className="max-w-3xl mx-auto mb-4">
+                            <Alert variant="destructive">
+                                <AlertTitle>Camera Access Required</AlertTitle>
+                                <AlertDescription>
+                                Please allow camera access in your browser settings to use this feature.
+                                </AlertDescription>
+                            </Alert>
+                        </div>
+                     )}
+
                     <div className="relative max-w-3xl mx-auto">
+                        {capturedImage && (
+                            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
+                                <Paperclip className="h-5 w-5 text-muted-foreground"/>
+                                <span className="text-sm text-muted-foreground">Image</span>
+                                <button onClick={() => setCapturedImage(null)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
+                            </div>
+                        )}
                         <Input
                             id="user-input"
                             placeholder="Ask your agent anything..."
                             ref={userInputRef}
                             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                            className="pr-16 bg-secondary"
+                            className="pr-24 pl-28 bg-secondary"
                         />
                         <div className="absolute inset-y-0 right-2 flex items-center">
+                            <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera">
+                                <Camera className="h-5 w-5" />
+                            </Button>
                             <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message">
                                 <Send className="h-5 w-5" />
                             </Button>
@@ -220,4 +312,5 @@ export default function ChatPage() {
             </main>
         </div>
     );
-}
+
+    
