@@ -47,7 +47,7 @@ export default function ChatPage() {
             let responseText;
 
             // Handle different response structures from different models
-            if (typeof aiResponse === 'object' && aiResponse !== null && aiResponse.message && typeof aiResponse.message.content === 'string') {
+            if (aiResponse && typeof aiResponse === 'object' && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 // Works for gpt-5-nano
                 responseText = aiResponse.message.content;
             } else if (typeof aiResponse === 'string') {
