@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Bot, User, LogIn } from 'lucide-react';
+import { Send, Bot, User } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 // Since puter.js and marked.js are loaded via script tags, we need to declare them to TypeScript
@@ -49,7 +49,7 @@ export default function ChatPage() {
             await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(newHistory, null, 2));
             loadHistory(); // Refresh history list
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error from AI:", error);
             addMessage('ai', 'Sorry, I encountered an error: ' + (error.message || 'Unknown error'));
         } finally {
@@ -64,8 +64,9 @@ export default function ChatPage() {
               .filter((f: {name: string}) => f.name.startsWith('Chat_') && f.name.endsWith('.json'))
               .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); // Sort descending
             setHistoryFiles(chatFiles);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error loading history:', error);
+            // This error is expected if the user is not logged in. Puter will handle the login prompt.
         }
     };
 
@@ -74,7 +75,7 @@ export default function ChatPage() {
             const content = await puter.fs.read(file.path);
             const loadedHistory = JSON.parse(content);
             setChatHistory(loadedHistory);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error viewing chat:', error);
             alert('Error loading chat.');
         }
