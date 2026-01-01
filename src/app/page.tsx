@@ -184,7 +184,7 @@ export default function ChatPage() {
                             <SelectItem value="anthropic/claude-3.5-sonnet">🧠 Claude 3.5 Sonnet (Logic)</SelectItem>
                             <SelectItem value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Fast)</SelectItem>
                             <SelectItem value="deepseek-chat">🤖 DeepSeek V2 (Coding)</SelectItem>
-                            <SelectItem value="meta-llama/meta-llama-3.1-70b-instruct">🦙 Llama 3.1 (Open Source)</SelectItem>
+                            <SelectItem value="togetherai:meta-llama/meta-llama-3.1-70b-instruct-turbo">🦙 Llama 3.1 (Open Source)</SelectItem>
                         </SelectContent>
                     </Select>
                 </header>
