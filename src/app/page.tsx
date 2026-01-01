@@ -69,7 +69,7 @@ export default function ChatPage() {
     
         } catch (error: any) {
             console.error("Error from AI:", error);
-            const errorMessage = error.message || 'An unknown error occurred while contacting the AI.';
+            const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
             addMessage('ai', 'Sorry, I encountered an error: ' + errorMessage);
         } finally {
             setStatus('Ready');
