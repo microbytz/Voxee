@@ -31,25 +31,31 @@ export default function ChatPage() {
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText) return;
-
-        addMessage('user', userText);
-
+    
+        const newHistory = [...chatHistory, { role: 'user', content: userText }];
+        setChatHistory(newHistory);
+    
         if (userInputRef.current) {
             userInputRef.current.value = '';
         }
-
+    
         setStatus('Thinking...');
-
+    
         try {
-            const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
-            const finalHistory = [...chatHistory, {role: 'user', content: userText}, {role: 'ai', content: aiResponse}];
+            // Prepare history for the AI, using the updated state
+            const historyForAI = newHistory
+                .slice(1) // Remove the initial "Hello" message
+                .map(msg => msg.content);
+    
+            const aiResponse = await puter.ai.chat(historyForAI, { model: currentAgent });
             
             addMessage('ai', aiResponse);
             
+            const finalHistoryForSave = [...newHistory, { role: 'ai', content: aiResponse }];
             // Auto-save chat
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistory, null, 2));
+            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
             loadHistory(); // Refresh history list
-
+    
         } catch (error: any) {
             console.error("Error from AI:", error);
             const errorMessage = error.message || 'The AI returned an empty response. This could be due to a network issue or a problem with the AI model. Please try again.';
@@ -67,8 +73,7 @@ export default function ChatPage() {
               .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); // Sort descending
             setHistoryFiles(chatFiles);
         } catch (error: any) {
-            console.error('Error loading history:', error);
-            // This error is expected if the user is not logged in. Puter will handle the login prompt.
+            console.error('Error loading history:', error.message || error);
         }
     };
 
