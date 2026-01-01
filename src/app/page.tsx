@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, CameraReverse, Pen, Eraser } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
@@ -60,13 +60,16 @@ export default function ChatPage() {
             const aiResponse = await puter.ai.chat(messageContent, { model: currentAgent, max_tokens: 4096 });
             
             let responseText;
-
+            // Handle gpt-5-nano and gemini format
             if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 responseText = aiResponse.message.content;
-            } else if (typeof aiResponse === 'string') {
-                responseText = aiResponse;
+            // Handle claude, deepseek, llama format
             } else if (Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
                 responseText = aiResponse[0].text;
+            }
+             // Handle case where response is a simple string
+            else if (typeof aiResponse === 'string') {
+                responseText = aiResponse;
             }
             else {
                  throw new Error("The AI returned a response in an unexpected format: " + JSON.stringify(aiResponse));
@@ -404,7 +407,7 @@ export default function ChatPage() {
                                 <Pen className="h-8 w-8 text-white"/>
                             </Button>
                             <Button onClick={handleFlipCamera} size="icon" variant="ghost" className="absolute right-10 bg-black/30 hover:bg-black/50">
-                                <CameraReverse className="h-8 w-8 text-white"/>
+                                <SwitchCamera className="h-8 w-8 text-white"/>
                             </Button>
                         </div>
                     </div>
@@ -452,5 +455,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
