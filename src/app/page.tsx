@@ -25,7 +25,6 @@ export default function ChatPage() {
     const [showCamera, setShowCamera] = React.useState(false);
     const [capturedImage, setCapturedImage] = React.useState<string | null>(null);
     const [cameraFacingMode, setCameraFacingMode] = React.useState<'user' | 'environment'>('user');
-    const [isDrawing, setIsDrawing] = React.useState(false);
     const [brushColor, setBrushColor] = React.useState('#FF0000'); // Default to red
     const [isDrawingActive, setIsDrawingActive] = React.useState(false);
 
@@ -220,6 +219,7 @@ export default function ChatPage() {
         context.lineCap = 'round';
         context.lineJoin = 'round';
 
+        let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
 
@@ -236,23 +236,25 @@ export default function ChatPage() {
         };
         
         const startDrawing = (e: MouseEvent | TouchEvent) => {
-            setIsDrawing(true);
+            isDrawing = true;
             const {x, y} = getCoords(e);
             [lastX, lastY] = [x, y];
+            context.beginPath();
+            context.moveTo(lastX, lastY);
         };
 
         const draw = (e: MouseEvent | TouchEvent) => {
             if (!isDrawing) return;
             e.preventDefault();
             const {x, y} = getCoords(e);
-            context.beginPath();
-            context.moveTo(lastX, lastY);
             context.lineTo(x, y);
             context.stroke();
             [lastX, lastY] = [x, y];
         };
 
-        const stopDrawing = () => setIsDrawing(false);
+        const stopDrawing = () => {
+            isDrawing = false;
+        };
 
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mousemove', draw);
@@ -272,7 +274,7 @@ export default function ChatPage() {
             canvas.removeEventListener('touchmove', draw);
             canvas.removeEventListener('touchend', stopDrawing);
         };
-    }, [isDrawing, brushColor, isDrawingActive]);
+    }, [brushColor, isDrawingActive]);
 
 
     // --- Effects ---
@@ -426,7 +428,7 @@ export default function ChatPage() {
                         </div>
                      )}
 
-                    <div className="relative max-w-3xl mx-auto">
+                    <div className="relative max-w-3xl mx-auto w-full">
                         {capturedImage && (
                             <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
                                 <Paperclip className="h-5 w-5 text-muted-foreground"/>
