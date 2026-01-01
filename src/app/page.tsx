@@ -54,14 +54,18 @@ export default function ChatPage() {
                 // Works for Gemini
                 responseText = aiResponse;
             } else {
-                 throw new Error(`The AI returned a response in an unexpected format: ${JSON.stringify(aiResponse)}`);
+                // For debugging, show the raw response for unknown formats
+                responseText = "```json\n" + JSON.stringify(aiResponse, null, 2) + "\n```";
             }
 
             addMessage('ai', responseText);
             
-            const finalHistoryForSave = [...newHistoryWithUser, { role: 'ai', content: responseText }];
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
-            loadHistory(); // Refresh history list
+            // Only save history if the response was valid and not a debug message
+            if (!responseText.startsWith("```json")) {
+                const finalHistoryForSave = [...newHistoryWithUser, { role: 'ai', content: responseText }];
+                await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
+                loadHistory(); // Refresh history list
+            }
     
         } catch (error: any) {
             console.error("Error from AI:", error);
