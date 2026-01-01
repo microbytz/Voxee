@@ -32,8 +32,8 @@ export default function ChatPage() {
         const userText = userInputRef.current?.value || '';
         if (!userText) return;
     
-        const newHistory = [...chatHistory, { role: 'user', content: userText }];
-        setChatHistory(newHistory);
+        const newHistoryWithUser = [...chatHistory, { role: 'user', content: userText }];
+        setChatHistory(newHistoryWithUser);
     
         if (userInputRef.current) {
             userInputRef.current.value = '';
@@ -42,23 +42,33 @@ export default function ChatPage() {
         setStatus('Thinking...');
     
         try {
-            // The puter.ai.chat function handles conversation history automatically.
-            // We only need to send the latest user message.
             const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
-            
-            if (!aiResponse) {
-                throw new Error("The AI returned an empty response. This could be due to a network issue or a problem with the AI model. Please try again.");
+
+            // --- DEBUGGING ---
+            console.log("Raw AI Response:", JSON.stringify(aiResponse, null, 2));
+
+            let responseText = '';
+            if (typeof aiResponse === 'string') {
+                responseText = aiResponse;
+            } else if (aiResponse && typeof aiResponse === 'object' && aiResponse.text) {
+                responseText = aiResponse.text;
+            } else {
+                 throw new Error("The AI returned a response in an unexpected format.");
             }
-            addMessage('ai', aiResponse);
+
+            if (!responseText) {
+                throw new Error("The AI returned an empty response.");
+            }
+
+            addMessage('ai', responseText);
             
-            const finalHistoryForSave = [...newHistory, { role: 'ai', content: aiResponse }];
-            // Auto-save chat
+            const finalHistoryForSave = [...newHistoryWithUser, { role: 'ai', content: responseText }];
             await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
             loadHistory(); // Refresh history list
     
         } catch (error: any) {
             console.error("Error from AI:", error);
-            const errorMessage = error.message || 'The AI returned an empty response. This could be due to a network issue or a problem with the AI model. Please try again.';
+            const errorMessage = error.message || 'An unknown error occurred while contacting the AI.';
             addMessage('ai', 'Sorry, I encountered an error: ' + errorMessage);
         } finally {
             setStatus('Ready');
@@ -98,7 +108,8 @@ export default function ChatPage() {
     React.useEffect(() => {
         const handlePuterReady = async () => {
             startNewChat();
-            loadHistory();
+            // This will prompt for login if not already logged in
+            loadHistory(); 
         };
 
         if (window.hasOwnProperty('puter')) {
