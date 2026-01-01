@@ -44,16 +44,7 @@ export default function ChatPage() {
         try {
             const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
 
-            let responseText = '';
-            if (aiResponse && typeof aiResponse === 'object') {
-                if (aiResponse.text) {
-                    responseText = aiResponse.text;
-                } else if (aiResponse.content) {
-                    responseText = aiResponse.content;
-                }
-            } else if (typeof aiResponse === 'string') {
-                responseText = aiResponse;
-            }
+            const responseText = aiResponse?.message?.content;
 
             if (!responseText) {
                  throw new Error(`The AI returned a response in an unexpected format: ${JSON.stringify(aiResponse)}`);
