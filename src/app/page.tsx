@@ -42,12 +42,9 @@ export default function ChatPage() {
         setStatus('Thinking...');
     
         try {
-            // Prepare history for the AI, using the updated state
-            const historyForAI = newHistory
-                .slice(1) // Remove the initial "Hello" message
-                .map(msg => msg.content);
-    
-            const aiResponse = await puter.ai.chat(historyForAI, { model: currentAgent });
+            // The puter.ai.chat function handles conversation history automatically.
+            // We only need to send the latest user message.
+            const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
             
             if (!aiResponse) {
                 throw new Error("The AI returned an empty response. This could be due to a network issue or a problem with the AI model. Please try again.");
