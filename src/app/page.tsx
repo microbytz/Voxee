@@ -31,42 +31,44 @@ export default function ChatPage() {
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText) return;
-    
+
         const newHistoryWithUser = [...chatHistory, { role: 'user', content: userText }];
         setChatHistory(newHistoryWithUser);
-    
+
         if (userInputRef.current) {
             userInputRef.current.value = '';
         }
-    
+
         setStatus('Thinking...');
-    
+
         try {
             const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
 
             let responseText;
-
-            // Handle different response structures from different models
-            if (aiResponse && typeof aiResponse === 'object' && aiResponse.message && typeof aiResponse.message.content === 'string') {
-                // Works for gpt-5-nano
+            
+            // This is the structure for GPT-5 Nano and some others
+            if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 responseText = aiResponse.message.content;
-            } else if (typeof aiResponse === 'string') {
-                // Works for Gemini
+            } 
+            // This is the structure for Gemini
+            else if (typeof aiResponse === 'string') {
                 responseText = aiResponse;
-            } else {
-                // For debugging, show the raw response for unknown formats
-                responseText = "```json\n" + JSON.stringify(aiResponse, null, 2) + "\n```";
+            }
+            // This is the structure for Claude, Llama, etc.
+            else if (Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
+                responseText = aiResponse[0].text;
+            }
+            else {
+                // If we get here, the format is unknown. Display the raw response for debugging.
+                throw new Error("The AI returned a response in an unexpected format: " + JSON.stringify(aiResponse));
             }
 
             addMessage('ai', responseText);
             
-            // Only save history if the response was valid and not a debug message
-            if (!responseText.startsWith("```json")) {
-                const finalHistoryForSave = [...newHistoryWithUser, { role: 'ai', content: responseText }];
-                await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
-                loadHistory(); // Refresh history list
-            }
-    
+            const finalHistoryForSave = [...newHistoryWithUser, { role: 'ai', content: responseText }];
+            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
+            loadHistory(); // Refresh history list
+
         } catch (error: any) {
             console.error("Error from AI:", error);
             const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
@@ -179,10 +181,10 @@ export default function ChatPage() {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="gpt-5-nano">⚡ GPT-5 Nano (Fast & Free)</SelectItem>
-                            <SelectItem value="claude-3-5-sonnet">🧠 Claude 3.5 Sonnet (Logic)</SelectItem>
+                            <SelectItem value="anthropic/claude-3.5-sonnet">🧠 Claude 3.5 Sonnet (Logic)</SelectItem>
                             <SelectItem value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Fast)</SelectItem>
-                            <SelectItem value="deepseek-chat">🤖 DeepSeek V3 (Coding)</SelectItem>
-                            <SelectItem value="meta-llama/llama-3.1-70b">🦙 Llama 3.1 (Open Source)</SelectItem>
+                            <SelectItem value="deepseek-chat">🤖 DeepSeek V2 (Coding)</SelectItem>
+                            <SelectItem value="meta-llama/meta-llama-3.1-70b-instruct">🦙 Llama 3.1 (Open Source)</SelectItem>
                         </SelectContent>
                     </Select>
                 </header>
