@@ -32,7 +32,8 @@ export default function ChatPage() {
         const userText = userInputRef.current?.value || '';
         if (!userText) return;
 
-        addMessage('user', userText);
+        const newHistory = [...chatHistory, { role: 'user', content: userText }];
+        setChatHistory(newHistory);
 
         if (userInputRef.current) {
             userInputRef.current.value = '';
@@ -41,12 +42,15 @@ export default function ChatPage() {
         setStatus('Thinking...');
 
         try {
-            const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
-            const newHistory = [...chatHistory, {role: 'user', content: userText}, {role: 'ai', content: aiResponse}];
-            addMessage('ai', aiResponse);
+            // Pass the entire history to the AI for context
+            const aiResponse = await puter.ai.chat(newHistory, { model: currentAgent });
+            const finalHistory = [...newHistory, {role: 'ai', content: aiResponse}];
+            
+            // Update state with AI response
+            setChatHistory(finalHistory);
             
             // Auto-save chat
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(newHistory, null, 2));
+            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistory, null, 2));
             loadHistory(); // Refresh history list
 
         } catch (error: any) {
