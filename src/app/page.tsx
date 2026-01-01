@@ -42,7 +42,7 @@ export default function ChatPage() {
         setStatus('Thinking...');
 
         try {
-            const aiResponse = await puter.ai.chat(userText, { model: currentAgent });
+            const aiResponse = await puter.ai.chat(userText, { model: currentAgent, max_tokens: 4096 });
 
             let responseText;
             
