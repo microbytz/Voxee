@@ -51,11 +51,9 @@ export default function ChatPage() {
                 // Works for gpt-5-nano
                 responseText = aiResponse.message.content;
             } else if (typeof aiResponse === 'string') {
-                // Fallback for models that return a direct string
+                // Works for Gemini
                 responseText = aiResponse;
-            }
-
-            if (!responseText) {
+            } else {
                  throw new Error(`The AI returned a response in an unexpected format: ${JSON.stringify(aiResponse)}`);
             }
 
@@ -106,8 +104,9 @@ export default function ChatPage() {
 
     React.useEffect(() => {
         const handlePuterReady = async () => {
-            startNewChat();
             // This will prompt for login if not already logged in
+            await puter.auth.getUser(); 
+            startNewChat();
             loadHistory(); 
         };
 
