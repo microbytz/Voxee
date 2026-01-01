@@ -49,6 +49,9 @@ export default function ChatPage() {
     
             const aiResponse = await puter.ai.chat(historyForAI, { model: currentAgent });
             
+            if (!aiResponse) {
+                throw new Error("The AI returned an empty response. This could be due to a network issue or a problem with the AI model. Please try again.");
+            }
             addMessage('ai', aiResponse);
             
             const finalHistoryForSave = [...newHistory, { role: 'ai', content: aiResponse }];
