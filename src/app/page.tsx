@@ -59,18 +59,20 @@ export default function ChatPage() {
             const aiResponse = await puter.ai.chat(messageContent, { model: currentAgent, max_tokens: 4096 });
             
             let responseText;
-            // Handle gpt-5-nano and gemini format
+            
+            // Handle gpt-5-nano and gemini format (string content)
             if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 responseText = aiResponse.message.content;
-            // Handle claude, deepseek, llama format
+            // Handle Claude-style format (array of text blocks)
+            } else if (aiResponse && aiResponse.message && Array.isArray(aiResponse.message.content) && aiResponse.message.content[0]?.type === 'text') {
+                responseText = aiResponse.message.content[0].text;
+            // Handle other array-based formats
             } else if (Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
                 responseText = aiResponse[0].text;
-            }
-             // Handle case where response is a simple string
-            else if (typeof aiResponse === 'string') {
+            // Handle case where response is a simple string
+            } else if (typeof aiResponse === 'string') {
                 responseText = aiResponse;
-            }
-            else {
+            } else {
                  throw new Error("The AI returned a response in an unexpected format: " + JSON.stringify(aiResponse));
             }
             
@@ -253,7 +255,9 @@ export default function ChatPage() {
         };
 
         const stopDrawing = () => {
+            if (!isDrawing) return;
             isDrawing = false;
+            context.beginPath(); // Reset the path to prevent connecting strokes
         };
 
         canvas.addEventListener('mousedown', startDrawing);
@@ -457,3 +461,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
