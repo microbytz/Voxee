@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
@@ -14,16 +14,26 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 declare const puter: any;
 declare const marked: any;
 
+interface PuterFile {
+    read: () => Promise<string | ArrayBuffer>;
+    name: string;
+    path: string;
+    type: string;
+}
+
 export default function ChatPage() {
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any }[]>([]);
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
     const [currentAgent, setCurrentAgent] = React.useState<string>('gpt-5-nano');
     const [status, setStatus] = React.useState<string>('Ready');
     
+    // Attachments State
+    const [capturedImage, setCapturedImage] = React.useState<string | null>(null);
+    const [attachedFiles, setAttachedFiles] = React.useState<PuterFile[]>([]);
+    
     // Camera and Drawing State
     const [hasCameraPermission, setHasCameraPermission] = React.useState<boolean | null>(null);
     const [showCamera, setShowCamera] = React.useState(false);
-    const [capturedImage, setCapturedImage] = React.useState<string | null>(null);
     const [cameraFacingMode, setCameraFacingMode] = React.useState<'user' | 'environment'>('user');
     const [brushColor, setBrushColor] = React.useState('#FF0000'); // Default to red
     const [isDrawingActive, setIsDrawingActive] = React.useState(false);
@@ -43,20 +53,38 @@ export default function ChatPage() {
     
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
-        if (!userText && !capturedImage) return;
+        if (!userText && !capturedImage && attachedFiles.length === 0) return;
 
-        const messageContent: (string | {type: string, data: string})[] = [];
-        if (userText) messageContent.push(userText);
-        if (capturedImage) messageContent.push({ type: 'image', data: capturedImage });
+        let messageContent: any[] = [];
+        if(userText) messageContent.push(userText);
 
-        addMessage('user', userText || 'Image');
+        const currentMessage = {
+            role: 'user',
+            content: userText || 'File(s) attached',
+            attachments: [] as {type: string, data: string | ArrayBuffer, name: string}[]
+        };
+
+        if (capturedImage) {
+            messageContent.push({ type: 'image', data: capturedImage });
+            currentMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
+        }
+        
+        for (const file of attachedFiles) {
+            const content = await file.read();
+            messageContent.push({ type: file.type, data: content, name: file.name });
+            currentMessage.attachments.push({ type: file.type, data: content, name: file.name });
+        }
+        
+        setChatHistory(prev => [...prev, currentMessage]);
+        
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
-
+        setAttachedFiles([]);
+        
         setStatus('Thinking...');
 
         try {
-            const aiResponse = await puter.ai.chat(messageContent, { model: currentAgent, max_tokens: 4096 });
+            const aiResponse = await puter.ai.chat(messageContent, { model: currentAgent, max_tokens: 8192 });
             
             let responseText;
             
@@ -66,8 +94,7 @@ export default function ChatPage() {
             // Handle Claude-style format (array of text blocks)
             } else if (aiResponse && aiResponse.message && Array.isArray(aiResponse.message.content) && aiResponse.message.content[0]?.type === 'text') {
                 responseText = aiResponse.message.content[0].text;
-            // Handle other array-based formats
-            } else if (Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
+            } else if (aiResponse && Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
                 responseText = aiResponse[0].text;
             // Handle case where response is a simple string
             } else if (typeof aiResponse === 'string') {
@@ -78,7 +105,7 @@ export default function ChatPage() {
             
             addMessage('ai', responseText);
             
-            const finalHistoryForSave = [...chatHistory, { role: 'user', content: userText }, { role: 'ai', content: responseText }];
+            const finalHistoryForSave = [...chatHistory, currentMessage, { role: 'ai', content: responseText }];
             await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
             loadHistory(); 
 
@@ -118,7 +145,25 @@ export default function ChatPage() {
         setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
         if(userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
+        setAttachedFiles([]);
     };
+
+    // --- Attachment Functions ---
+    const handleFilePicker = async () => {
+        try {
+            const files = await puter.ui.showOpenFilePicker({
+                multiple: true,
+            });
+            setAttachedFiles(prev => [...prev, ...files]);
+        } catch (error) {
+            console.log("File picker was cancelled.");
+        }
+    };
+
+    const removeAttachedFile = (filePath: string) => {
+        setAttachedFiles(prev => prev.filter(f => f.path !== filePath));
+    };
+
 
     // --- Camera & Drawing Functions ---
     const stopCamera = () => {
@@ -202,29 +247,28 @@ export default function ChatPage() {
         const canvas = canvasRef.current;
         const video = videoRef.current;
         if (!canvas || !video || !isDrawingActive) return;
-
+    
         const context = canvas.getContext('2d');
         if (!context) return;
-        
+    
         // Match canvas size to video feed
         const setCanvasSize = () => {
             if (video.videoWidth > 0) {
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.strokeStyle = brushColor;
+                context.lineWidth = 5;
+                context.lineCap = 'round';
+                context.lineJoin = 'round';
             }
         };
         video.addEventListener('loadedmetadata', setCanvasSize);
-        setCanvasSize();
-
-        context.strokeStyle = brushColor;
-        context.lineWidth = 5;
-        context.lineCap = 'round';
-        context.lineJoin = 'round';
-
+        setCanvasSize(); // Call it once initially
+    
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
-
+    
         const getCoords = (e: MouseEvent | TouchEvent) => {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -236,38 +280,38 @@ export default function ChatPage() {
                 y: (clientY - rect.top) * scaleY
             };
         };
-        
+    
         const startDrawing = (e: MouseEvent | TouchEvent) => {
+            e.preventDefault();
             isDrawing = true;
-            const {x, y} = getCoords(e);
-            [lastX, lastY] = [x, y];
+            const { x, y } = getCoords(e);
             context.beginPath();
-            context.moveTo(lastX, lastY);
+            context.moveTo(x, y);
+            [lastX, lastY] = [x, y];
         };
-
+    
         const draw = (e: MouseEvent | TouchEvent) => {
             if (!isDrawing) return;
             e.preventDefault();
-            const {x, y} = getCoords(e);
+            const { x, y } = getCoords(e);
             context.lineTo(x, y);
             context.stroke();
             [lastX, lastY] = [x, y];
         };
-
+    
         const stopDrawing = () => {
             if (!isDrawing) return;
             isDrawing = false;
-            context.beginPath(); // Reset the path to prevent connecting strokes
         };
-
+    
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mouseout', stopDrawing);
-        canvas.addEventListener('touchstart', startDrawing);
-        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
         canvas.addEventListener('touchend', stopDrawing);
-        
+    
         return () => {
             video.removeEventListener('loadedmetadata', setCanvasSize);
             canvas.removeEventListener('mousedown', startDrawing);
@@ -278,8 +322,8 @@ export default function ChatPage() {
             canvas.removeEventListener('touchmove', draw);
             canvas.removeEventListener('touchend', stopDrawing);
         };
-    }, [brushColor, isDrawingActive]);
-
+    }, [brushColor, isDrawingActive, showCamera]);
+    
 
     // --- Effects ---
 
@@ -317,6 +361,19 @@ export default function ChatPage() {
         }
         const html = marked.parse(content);
         return <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
+    };
+    
+    const AttachmentPreview = ({ attachment }: { attachment: {type: string, data: any, name: string} }) => {
+        if (attachment.type.startsWith('image/') && typeof attachment.data === 'string') {
+            return <img src={attachment.data} alt={attachment.name} className="mt-2 rounded-lg max-w-xs" />;
+        }
+        // Add more previews for other file types if needed
+        return (
+            <div className="mt-2 p-2 bg-secondary/50 rounded-lg flex items-center gap-2">
+                <FileIcon className="h-5 w-5" />
+                <span className="text-sm">{attachment.name}</span>
+            </div>
+        );
     };
 
     return (
@@ -358,7 +415,7 @@ export default function ChatPage() {
                             <SelectItem value="gpt-5-nano">⚡ GPT-5 Nano (Fast & Free)</SelectItem>
                             <SelectItem value="anthropic/claude-3.5-sonnet">🧠 Claude 3.5 Sonnet (Logic)</SelectItem>
                             <SelectItem value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Fast)</SelectItem>
-                             <SelectItem value="deepseek-chat">🤖 DeepSeek V2 (Coding)</SelectItem>
+                            <SelectItem value="deepseek-chat">🤖 DeepSeek V2 (Coding)</SelectItem>
                             <SelectItem value="togetherai:meta-llama/meta-llama-3.1-70b-instruct-turbo">🦙 Llama 3.1 (Open Source)</SelectItem>
                         </SelectContent>
                     </Select>
@@ -370,9 +427,9 @@ export default function ChatPage() {
                            {msg.role === 'ai' && <Avatar><AvatarFallback><Bot /></AvatarFallback></Avatar>}
                             <div className={`p-4 rounded-lg max-w-2xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary'}`}>
                                 {renderMessageContent(msg.content)}
-                                {capturedImage && msg.role === 'user' && index === chatHistory.length - 1 && (
-                                     <img src={capturedImage} alt="Captured content" className="mt-2 rounded-lg max-w-xs" />
-                                )}
+                                {(msg as any).attachments?.map((att: any, i: number) => (
+                                    <AttachmentPreview key={i} attachment={att} />
+                                ))}
                             </div>
                            {msg.role === 'user' && <Avatar><AvatarFallback className="bg-primary text-primary-foreground"><User /></AvatarFallback></Avatar>}
                         </div>
@@ -433,21 +490,35 @@ export default function ChatPage() {
                      )}
 
                     <div className="relative max-w-3xl mx-auto w-full">
-                        {capturedImage && (
-                            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
-                                <Paperclip className="h-5 w-5 text-muted-foreground"/>
-                                <span className="text-sm text-muted-foreground">Image</span>
-                                <button onClick={() => setCapturedImage(null)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
-                            </div>
-                        )}
+                        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                            {capturedImage && (
+                                <div className="flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
+                                    <Camera className="h-5 w-5 text-muted-foreground"/>
+                                    <span className="text-sm text-muted-foreground">Image</span>
+                                    <button onClick={() => setCapturedImage(null)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
+                                </div>
+                            )}
+                            {attachedFiles.map(file => (
+                                <div key={file.path} className="flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
+                                    <FileIcon className="h-5 w-5 text-muted-foreground"/>
+                                    <span className="text-sm text-muted-foreground truncate max-w-[100px]">{file.name}</span>
+                                    <button onClick={() => removeAttachedFile(file.path)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
+                                </div>
+                            ))}
+                        </div>
+
                         <Input
                             id="user-input"
                             placeholder="Ask your agent anything..."
                             ref={userInputRef}
                             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                            className="pr-24 pl-28 bg-secondary"
+                            className="pr-32 pl-4"
+                            style={{paddingLeft: `${(capturedImage ? 80 : 0) + attachedFiles.reduce((acc, file) => acc + Math.min(100, file.name.length * 7) + 40, 5)}px`}}
                         />
                         <div className="absolute inset-y-0 right-2 flex items-center">
+                            <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files">
+                                <Paperclip className="h-5 w-5" />
+                            </Button>
                             <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera">
                                 <Camera className="h-5 w-5" />
                             </Button>
