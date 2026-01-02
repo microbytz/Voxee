@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { AGENTS, Agent } from '@/lib/agents';
+
 
 // Since puter.js and marked.js are loaded via script tags, we need to declare them to TypeScript
 declare const puter: any;
@@ -24,7 +26,7 @@ interface PuterFile {
 export default function ChatPage() {
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any }[]>([]);
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
-    const [currentAgent, setCurrentAgent] = React.useState<string>('gpt-5-nano');
+    const [currentAgentId, setCurrentAgentId] = React.useState<string>(AGENTS[0].id);
     const [status, setStatus] = React.useState<string>('Ready');
     
     // Attachments State
@@ -44,6 +46,18 @@ export default function ChatPage() {
     const videoRef = React.useRef<HTMLVideoElement>(null);
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
     const streamRef = React.useRef<MediaStream | null>(null);
+    
+    const agentProviders = React.useMemo(() => {
+        const providers = AGENTS.reduce((acc, agent) => {
+            if (!acc[agent.provider]) {
+                acc[agent.provider] = [];
+            }
+            acc[agent.provider].push(agent);
+            return acc;
+        }, {} as Record<string, Agent[]>);
+        return Object.entries(providers);
+    }, []);
+
 
     // --- Core Functions ---
 
@@ -55,27 +69,40 @@ export default function ChatPage() {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
 
-        let messageContent: any[] = [];
-        if(userText) messageContent.push(userText);
+        let messageContent: any = [];
+        
+        const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
+        if (selectedAgent && selectedAgent.systemPrompt) {
+            messageContent.push({ role: 'system', content: selectedAgent.systemPrompt });
+        }
 
-        const currentMessage = {
+        let userMessage: any = { role: 'user', content: [] };
+        if(userText) userMessage.content.push({ type: 'text', text: userText });
+
+        const currentMessageForHistory = {
             role: 'user',
             content: userText || 'File(s) attached',
             attachments: [] as {type: string, data: string | ArrayBuffer, name: string}[]
         };
 
         if (capturedImage) {
-            messageContent.push({ type: 'image', data: capturedImage });
-            currentMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
+            userMessage.content.push({ type: 'image', source: { data: capturedImage } });
+            currentMessageForHistory.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
         }
         
         for (const file of attachedFiles) {
             const content = await file.read();
-            messageContent.push({ type: file.type, data: content, name: file.name });
-            currentMessage.attachments.push({ type: file.type, data: content, name: file.name });
+            userMessage.content.push({ type: 'text', text: `Attached file: ${file.name}`});
+            // A more robust implementation would handle different file types
+            if (typeof content === 'string') {
+                 userMessage.content.push({ type: 'text', text: content });
+            }
+            currentMessageForHistory.attachments.push({ type: file.type, data: content, name: file.name });
         }
         
-        setChatHistory(prev => [...prev, currentMessage]);
+        messageContent.push(userMessage);
+
+        setChatHistory(prev => [...prev, currentMessageForHistory]);
         
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
@@ -84,19 +111,16 @@ export default function ChatPage() {
         setStatus('Thinking...');
 
         try {
-            const aiResponse = await puter.ai.chat(messageContent, { model: currentAgent, max_tokens: 8192 });
+            const aiResponse = await puter.ai.chat(messageContent, { model: currentAgentId, max_tokens: 8192 });
             
             let responseText;
             
-            // Handle gpt-5-nano and gemini format (string content)
             if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 responseText = aiResponse.message.content;
-            // Handle Claude-style format (array of text blocks)
             } else if (aiResponse && aiResponse.message && Array.isArray(aiResponse.message.content) && aiResponse.message.content[0]?.type === 'text') {
                 responseText = aiResponse.message.content[0].text;
             } else if (aiResponse && Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
                 responseText = aiResponse[0].text;
-            // Handle case where response is a simple string
             } else if (typeof aiResponse === 'string') {
                 responseText = aiResponse;
             } else {
@@ -105,7 +129,7 @@ export default function ChatPage() {
             
             addMessage('ai', responseText);
             
-            const finalHistoryForSave = [...chatHistory, currentMessage, { role: 'ai', content: responseText }];
+            const finalHistoryForSave = [...chatHistory, currentMessageForHistory, { role: 'ai', content: responseText }];
             await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
             loadHistory(); 
 
@@ -133,7 +157,7 @@ export default function ChatPage() {
     const viewChat = async (file: { name: string, path: string }) => {
         try {
             const content = await puter.fs.read(file.path);
-            const loadedHistory = JSON.parse(content);
+            const loadedHistory = JSON.parse(content as string);
             setChatHistory(loadedHistory);
         } catch (error: any) {
             console.error('Error viewing chat:', error);
@@ -246,29 +270,53 @@ export default function ChatPage() {
     React.useEffect(() => {
         const canvas = canvasRef.current;
         const video = videoRef.current;
-        if (!canvas || !video || !isDrawingActive) return;
-    
+        if (!canvas || !video || !showCamera) return;
+
         const context = canvas.getContext('2d');
         if (!context) return;
-    
-        // Match canvas size to video feed
+        
         const setCanvasSize = () => {
             if (video.videoWidth > 0) {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                context.strokeStyle = brushColor;
-                context.lineWidth = 5;
-                context.lineCap = 'round';
-                context.lineJoin = 'round';
             }
         };
         video.addEventListener('loadedmetadata', setCanvasSize);
-        setCanvasSize(); // Call it once initially
-    
+        setCanvasSize();
+
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
-    
+
+        const startDrawing = (e: MouseEvent | TouchEvent) => {
+            if (!isDrawingActive) return;
+            e.preventDefault();
+            isDrawing = true;
+            const { x, y } = getCoords(e);
+            context.strokeStyle = brushColor;
+            context.lineWidth = 5;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.beginPath();
+            context.moveTo(x, y);
+            [lastX, lastY] = [x, y];
+        };
+        
+        const draw = (e: MouseEvent | TouchEvent) => {
+            if (!isDrawing || !isDrawingActive) return;
+            e.preventDefault();
+            const { x, y } = getCoords(e);
+            context.lineTo(x, y);
+            context.stroke();
+            [lastX, lastY] = [x, y];
+        };
+        
+        const stopDrawing = () => {
+            if (!isDrawing) return;
+            context.closePath();
+            isDrawing = false;
+        };
+
         const getCoords = (e: MouseEvent | TouchEvent) => {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -280,30 +328,7 @@ export default function ChatPage() {
                 y: (clientY - rect.top) * scaleY
             };
         };
-    
-        const startDrawing = (e: MouseEvent | TouchEvent) => {
-            e.preventDefault();
-            isDrawing = true;
-            const { x, y } = getCoords(e);
-            context.beginPath();
-            context.moveTo(x, y);
-            [lastX, lastY] = [x, y];
-        };
-    
-        const draw = (e: MouseEvent | TouchEvent) => {
-            if (!isDrawing) return;
-            e.preventDefault();
-            const { x, y } = getCoords(e);
-            context.lineTo(x, y);
-            context.stroke();
-            [lastX, lastY] = [x, y];
-        };
-    
-        const stopDrawing = () => {
-            if (!isDrawing) return;
-            isDrawing = false;
-        };
-    
+
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDrawing);
@@ -311,7 +336,7 @@ export default function ChatPage() {
         canvas.addEventListener('touchstart', startDrawing, { passive: false });
         canvas.addEventListener('touchmove', draw, { passive: false });
         canvas.addEventListener('touchend', stopDrawing);
-    
+
         return () => {
             video.removeEventListener('loadedmetadata', setCanvasSize);
             canvas.removeEventListener('mousedown', startDrawing);
@@ -367,7 +392,6 @@ export default function ChatPage() {
         if (attachment.type.startsWith('image/') && typeof attachment.data === 'string') {
             return <img src={attachment.data} alt={attachment.name} className="mt-2 rounded-lg max-w-xs" />;
         }
-        // Add more previews for other file types if needed
         return (
             <div className="mt-2 p-2 bg-secondary/50 rounded-lg flex items-center gap-2">
                 <FileIcon className="h-5 w-5" />
@@ -407,16 +431,20 @@ export default function ChatPage() {
             <main className="flex-1 flex flex-col">
                  <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
                     <div className="font-bold">Infinity AI <span className="text-primary text-sm ml-2">{status}</span></div>
-                    <Select value={currentAgent} onValueChange={setCurrentAgent}>
+                    <Select value={currentAgentId} onValueChange={setCurrentAgentId}>
                         <SelectTrigger className="w-[280px]">
                             <SelectValue placeholder="Select an AI Agent" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="gpt-5-nano">⚡ GPT-5 Nano (Fast & Free)</SelectItem>
-                            <SelectItem value="anthropic/claude-3.5-sonnet">🧠 Claude 3.5 Sonnet (Logic)</SelectItem>
-                            <SelectItem value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Fast)</SelectItem>
-                            <SelectItem value="deepseek-chat">🤖 DeepSeek V2 (Coding)</SelectItem>
-                            <SelectItem value="togetherai:meta-llama/meta-llama-3.1-70b-instruct-turbo">🦙 Llama 3.1 (Open Source)</SelectItem>
+                            {agentProviders.map(([provider, agents]) => (
+                                <optgroup label={provider} key={provider}>
+                                    {agents.map(agent => (
+                                        <SelectItem key={agent.id} value={agent.id}>
+                                            {agent.name}
+                                        </SelectItem>
+                                    ))}
+                                </optgroup>
+                            ))}
                         </SelectContent>
                     </Select>
                 </header>
@@ -503,6 +531,7 @@ export default function ChatPage() {
                                     <FileIcon className="h-5 w-5 text-muted-foreground"/>
                                     <span className="text-sm text-muted-foreground truncate max-w-[100px]">{file.name}</span>
                                     <button onClick={() => removeAttachedFile(file.path)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
+
                                 </div>
                             ))}
                         </div>
@@ -532,5 +561,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
