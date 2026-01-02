@@ -5,7 +5,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -69,9 +69,9 @@ export default function ChatPage() {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
 
-        let messageContent: any = [];
-        
         const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
+        
+        let messageContent: any = [];
         if (selectedAgent && selectedAgent.systemPrompt) {
             messageContent.push({ role: 'system', content: selectedAgent.systemPrompt });
         }
@@ -293,11 +293,11 @@ export default function ChatPage() {
             e.preventDefault();
             isDrawing = true;
             const { x, y } = getCoords(e);
+            context.beginPath();
             context.strokeStyle = brushColor;
             context.lineWidth = 5;
             context.lineCap = 'round';
             context.lineJoin = 'round';
-            context.beginPath();
             context.moveTo(x, y);
             [lastX, lastY] = [x, y];
         };
@@ -313,7 +313,6 @@ export default function ChatPage() {
         
         const stopDrawing = () => {
             if (!isDrawing) return;
-            context.closePath();
             isDrawing = false;
         };
 
@@ -437,13 +436,14 @@ export default function ChatPage() {
                         </SelectTrigger>
                         <SelectContent>
                             {agentProviders.map(([provider, agents]) => (
-                                <optgroup label={provider} key={provider}>
+                                <SelectGroup key={provider}>
+                                    <SelectLabel>{provider}</SelectLabel>
                                     {agents.map(agent => (
                                         <SelectItem key={agent.id} value={agent.id}>
                                             {agent.name}
                                         </SelectItem>
                                     ))}
-                                </optgroup>
+                                </SelectGroup>
                             ))}
                         </SelectContent>
                     </Select>
