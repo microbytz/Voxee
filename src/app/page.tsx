@@ -10,6 +10,8 @@ import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AGENTS, Agent } from '@/lib/agents';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 // Since puter.js and marked.js are loaded via script tags, we need to declare them to TypeScript
@@ -314,6 +316,7 @@ export default function ChatPage() {
         const stopDrawing = () => {
             if (!isDrawing) return;
             isDrawing = false;
+            context.beginPath();
         };
 
         const getCoords = (e: MouseEvent | TouchEvent) => {
@@ -401,163 +404,169 @@ export default function ChatPage() {
 
     return (
         <div className="flex h-screen bg-background text-foreground">
-            <aside className="w-64 flex-col border-r border-border bg-secondary/20 hidden md:flex">
-                <div className="p-4 border-b border-border">
-                    <h2 className="text-lg font-semibold tracking-tight">☁️ Cloud History</h2>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2">
-                    <div className="space-y-1">
-                        {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">No saved chats.</p>}
-                        {historyFiles.map(file => (
-                            <Button
-                                key={file.path}
-                                variant="ghost"
-                                className="w-full justify-start text-muted-foreground hover:text-foreground"
-                                onClick={() => viewChat(file)}
-                            >
-                                <span className="truncate">📄 {new Date(parseInt(file.name.replace('Chat_', '').replace('.json',''))).toLocaleString()}</span>
-                            </Button>
-                        ))}
-                    </div>
-                </div>
-                <div className="p-2 border-t border-border">
-                    <Button className="w-full" onClick={startNewChat}>
-                         New Chat
-                    </Button>
-                </div>
-            </aside>
-
-            <main className="flex-1 flex flex-col">
-                 <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-                    <div className="font-bold">Infinity AI <span className="text-primary text-sm ml-2">{status}</span></div>
-                    <Select value={currentAgentId} onValueChange={setCurrentAgentId}>
-                        <SelectTrigger className="w-[280px]">
-                            <SelectValue placeholder="Select an AI Agent" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {agentProviders.map(([provider, agents]) => (
-                                <SelectGroup key={provider}>
-                                    <SelectLabel>{provider}</SelectLabel>
-                                    {agents.map(agent => (
-                                        <SelectItem key={agent.id} value={agent.id}>
-                                            {agent.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </header>
-
-                <div id="chat-window" ref={chatWindowRef} className="flex-1 overflow-y-auto p-6 space-y-8">
-                    {chatHistory.map((msg, index) => (
-                        <div key={index} className={`flex items-start gap-4`}>
-                           {msg.role === 'ai' && <Avatar><AvatarFallback><Bot /></AvatarFallback></Avatar>}
-                            <div className={`p-4 rounded-lg max-w-2xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary'}`}>
-                                {renderMessageContent(msg.content)}
-                                {(msg as any).attachments?.map((att: any, i: number) => (
-                                    <AttachmentPreview key={i} attachment={att} />
+            <ResizablePanelGroup direction="horizontal" className="w-full">
+                <ResizablePanel defaultSize={20} minSize={10} maxSize={30}>
+                    <aside className="w-full h-full flex-col border-r border-border bg-secondary/20 flex">
+                        <div className="p-4 border-b border-border">
+                            <h2 className="text-lg font-semibold tracking-tight">☁️ Cloud History</h2>
+                        </div>
+                        <ScrollArea className="flex-1 overflow-y-auto p-2">
+                            <div className="space-y-1">
+                                {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">No saved chats.</p>}
+                                {historyFiles.map(file => (
+                                    <Button
+                                        key={file.path}
+                                        variant="ghost"
+                                        className="w-full justify-start text-muted-foreground hover:text-foreground"
+                                        onClick={() => viewChat(file)}
+                                    >
+                                        <span className="truncate">📄 {new Date(parseInt(file.name.replace('Chat_', '').replace('.json',''))).toLocaleString()}</span>
+                                    </Button>
                                 ))}
                             </div>
-                           {msg.role === 'user' && <Avatar><AvatarFallback className="bg-primary text-primary-foreground"><User /></AvatarFallback></Avatar>}
+                        </ScrollArea>
+                        <div className="p-2 border-t border-border">
+                            <Button className="w-full" onClick={startNewChat}>
+                                New Chat
+                            </Button>
                         </div>
-                    ))}
-                </div>
-                
-                 {/* Camera View */}
-                {showCamera && (
-                    <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
-                        <video ref={videoRef} className="absolute top-0 left-0 w-full h-full object-cover" autoPlay muted playsInline />
-                        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" style={{ pointerEvents: isDrawingActive ? 'auto' : 'none' }}/>
+                    </aside>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={80}>
+                    <main className="flex-1 flex flex-col h-full">
+                        <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
+                            <div className="font-bold">Infinity AI <span className="text-primary text-sm ml-2">{status}</span></div>
+                            <Select value={currentAgentId} onValueChange={setCurrentAgentId}>
+                                <SelectTrigger className="w-[280px]">
+                                    <SelectValue placeholder="Select an AI Agent" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {agentProviders.map(([provider, agents]) => (
+                                        <SelectGroup key={provider}>
+                                            <SelectLabel>{provider}</SelectLabel>
+                                            {agents.map(agent => (
+                                                <SelectItem key={agent.id} value={agent.id}>
+                                                    {agent.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </header>
 
-                        {isDrawingActive && (
-                            <div className="absolute top-4 right-4 flex flex-col gap-2 bg-black/50 p-2 rounded-lg">
-                                <Button size="icon" variant="ghost" onClick={() => setBrushColor('#FF0000')} className={brushColor === '#FF0000' ? 'border-2 border-white' : ''}>
-                                    <div className="w-6 h-6 rounded-full bg-red-500"/>
-                                </Button>
-                                <Button size="icon" variant="ghost" onClick={() => setBrushColor('#00FF00')} className={brushColor === '#00FF00' ? 'border-2 border-white' : ''}>
-                                    <div className="w-6 h-6 rounded-full bg-green-500"/>
-                                </Button>
-                                <Button size="icon" variant="ghost" onClick={() => setBrushColor('#0000FF')} className={brushColor === '#0000FF' ? 'border-2 border-white' : ''}>
-                                    <div className="w-6 h-6 rounded-full bg-blue-500"/>
-                                </Button>
-                                <Button size="icon" variant="ghost" onClick={clearCanvas}>
-                                    <Eraser className="text-white"/>
-                                </Button>
+                        <div id="chat-window" ref={chatWindowRef} className="flex-1 overflow-y-auto p-6 space-y-8">
+                            {chatHistory.map((msg, index) => (
+                                <div key={index} className={`flex items-start gap-4`}>
+                                {msg.role === 'ai' && <Avatar><AvatarFallback><Bot /></AvatarFallback></Avatar>}
+                                    <div className={`p-4 rounded-lg max-w-2xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary'}`}>
+                                        {renderMessageContent(msg.content)}
+                                        {(msg as any).attachments?.map((att: any, i: number) => (
+                                            <AttachmentPreview key={i} attachment={att} />
+                                        ))}
+                                    </div>
+                                {msg.role === 'user' && <Avatar><AvatarFallback className="bg-primary text-primary-foreground"><User /></AvatarFallback></Avatar>}
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {/* Camera View */}
+                        {showCamera && (
+                            <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
+                                <video ref={videoRef} className="absolute top-0 left-0 w-full h-full object-cover" autoPlay muted playsInline />
+                                <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" style={{ pointerEvents: isDrawingActive ? 'auto' : 'none' }}/>
+
+                                {isDrawingActive && (
+                                    <div className="absolute top-4 right-4 flex flex-col gap-2 bg-black/50 p-2 rounded-lg">
+                                        <Button size="icon" variant="ghost" onClick={() => setBrushColor('#FF0000')} className={brushColor === '#FF0000' ? 'border-2 border-white' : ''}>
+                                            <div className="w-6 h-6 rounded-full bg-red-500"/>
+                                        </Button>
+                                        <Button size="icon" variant="ghost" onClick={() => setBrushColor('#00FF00')} className={brushColor === '#00FF00' ? 'border-2 border-white' : ''}>
+                                            <div className="w-6 h-6 rounded-full bg-green-500"/>
+                                        </Button>
+                                        <Button size="icon" variant="ghost" onClick={() => setBrushColor('#0000FF')} className={brushColor === '#0000FF' ? 'border-2 border-white' : ''}>
+                                            <div className="w-6 h-6 rounded-full bg-blue-500"/>
+                                        </Button>
+                                        <Button size="icon" variant="ghost" onClick={clearCanvas}>
+                                            <Eraser className="text-white"/>
+                                        </Button>
+                                    </div>
+                                )}
+
+                                <div className="absolute bottom-10 w-full flex justify-center items-center gap-8">
+                                    <Button onClick={closeCameraView} size="icon" variant="ghost" className="absolute left-10 bg-black/30 hover:bg-black/50">
+                                        <X className="h-8 w-8 text-white"/>
+                                    </Button>
+                                    
+                                    <Button onClick={takePicture} className="w-20 h-20 rounded-full border-4 border-white bg-white/30 hover:bg-white/50 ring-offset-0 focus:ring-0 focus:outline-none" />
+
+                                    <Button onClick={() => setIsDrawingActive(!isDrawingActive)} size="icon" variant="ghost" className={`absolute right-24 bg-black/30 hover:bg-black/50 ${isDrawingActive ? 'bg-white/30' : ''}`}>
+                                        <Pen className="h-8 w-8 text-white"/>
+                                    </Button>
+                                    <Button onClick={handleFlipCamera} size="icon" variant="ghost" className="absolute right-10 bg-black/30 hover:bg-black/50">
+                                        <SwitchCamera className="h-8 w-8 text-white"/>
+                                    </Button>
+                                </div>
                             </div>
                         )}
 
-                        <div className="absolute bottom-10 w-full flex justify-center items-center gap-8">
-                             <Button onClick={closeCameraView} size="icon" variant="ghost" className="absolute left-10 bg-black/30 hover:bg-black/50">
-                                <X className="h-8 w-8 text-white"/>
-                            </Button>
-                            
-                            <Button onClick={takePicture} className="w-20 h-20 rounded-full border-4 border-white bg-white/30 hover:bg-white/50 ring-offset-0 focus:ring-0 focus:outline-none" />
 
-                            <Button onClick={() => setIsDrawingActive(!isDrawingActive)} size="icon" variant="ghost" className={`absolute right-24 bg-black/30 hover:bg-black/50 ${isDrawingActive ? 'bg-white/30' : ''}`}>
-                                <Pen className="h-8 w-8 text-white"/>
-                            </Button>
-                            <Button onClick={handleFlipCamera} size="icon" variant="ghost" className="absolute right-10 bg-black/30 hover:bg-black/50">
-                                <SwitchCamera className="h-8 w-8 text-white"/>
-                            </Button>
-                        </div>
-                    </div>
-                 )}
-
-
-                <div className="p-4 border-t border-border bg-background/80 backdrop-blur-sm">
-                     {hasCameraPermission === false && (
-                         <div className="max-w-3xl mx-auto mb-4">
-                            <Alert variant="destructive">
-                                <AlertTitle>Camera Access Denied</AlertTitle>
-                                <AlertDescription>
-                                Please allow camera access in your browser settings to use this feature.
-                                </AlertDescription>
-                            </Alert>
-                        </div>
-                     )}
-
-                    <div className="relative max-w-3xl mx-auto w-full">
-                        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                            {capturedImage && (
-                                <div className="flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
-                                    <Camera className="h-5 w-5 text-muted-foreground"/>
-                                    <span className="text-sm text-muted-foreground">Image</span>
-                                    <button onClick={() => setCapturedImage(null)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
+                        <div className="p-4 border-t border-border bg-background/80 backdrop-blur-sm">
+                            {hasCameraPermission === false && (
+                                <div className="max-w-3xl mx-auto mb-4">
+                                    <Alert variant="destructive">
+                                        <AlertTitle>Camera Access Denied</AlertTitle>
+                                        <AlertDescription>
+                                        Please allow camera access in your browser settings to use this feature.
+                                        </AlertDescription>
+                                    </Alert>
                                 </div>
                             )}
-                            {attachedFiles.map(file => (
-                                <div key={file.path} className="flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
-                                    <FileIcon className="h-5 w-5 text-muted-foreground"/>
-                                    <span className="text-sm text-muted-foreground truncate max-w-[100px]">{file.name}</span>
-                                    <button onClick={() => removeAttachedFile(file.path)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
 
+                            <div className="relative max-w-3xl mx-auto w-full">
+                                <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {capturedImage && (
+                                        <div className="flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
+                                            <Camera className="h-5 w-5 text-muted-foreground"/>
+                                            <span className="text-sm text-muted-foreground">Image</span>
+                                            <button onClick={() => setCapturedImage(null)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
+                                        </div>
+                                    )}
+                                    {attachedFiles.map(file => (
+                                        <div key={file.path} className="flex items-center gap-2 bg-secondary p-1 pr-2 rounded-full">
+                                            <FileIcon className="h-5 w-5 text-muted-foreground"/>
+                                            <span className="text-sm text-muted-foreground truncate max-w-[100px]">{file.name}</span>
+                                            <button onClick={() => removeAttachedFile(file.path)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
+
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
 
-                        <Input
-                            id="user-input"
-                            placeholder="Ask your agent anything..."
-                            ref={userInputRef}
-                            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                            className="pr-32 pl-4"
-                            style={{paddingLeft: `${(capturedImage ? 80 : 0) + attachedFiles.reduce((acc, file) => acc + Math.min(100, file.name.length * 7) + 40, 5)}px`}}
-                        />
-                        <div className="absolute inset-y-0 right-2 flex items-center">
-                            <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files">
-                                <Paperclip className="h-5 w-5" />
-                            </Button>
-                            <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera">
-                                <Camera className="h-5 w-5" />
-                            </Button>
-                            <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message">
-                                <Send className="h-5 w-5" />
-                            </Button>
+                                <Input
+                                    id="user-input"
+                                    placeholder="Ask your agent anything..."
+                                    ref={userInputRef}
+                                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+                                    className="pr-32 pl-4"
+                                    style={{paddingLeft: `${(capturedImage ? 80 : 0) + attachedFiles.reduce((acc, file) => acc + Math.min(100, file.name.length * 7) + 40, 5)}px`}}
+                                />
+                                <div className="absolute inset-y-0 right-2 flex items-center">
+                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files">
+                                        <Paperclip className="h-5 w-5" />
+                                    </Button>
+                                    <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera">
+                                        <Camera className="h-5 w-5" />
+                                    </Button>
+                                    <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message">
+                                        <Send className="h-5 w-5" />
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </main>
+                    </main>
+                </ResizablePanel>
+            </ResizablePanelGroup>
         </div>
     );
 }
