@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AGENTS, Agent } from '@/lib/agents';
@@ -70,23 +70,23 @@ export default function ChatPage() {
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
-
+    
         const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
         
         let messageContent: any = [];
         if (selectedAgent && selectedAgent.systemPrompt) {
             messageContent.push({ role: 'system', content: selectedAgent.systemPrompt });
         }
-
+    
         let userMessage: any = { role: 'user', content: [] };
         if(userText) userMessage.content.push({ type: 'text', text: userText });
-
+    
         const currentMessageForHistory = {
             role: 'user',
             content: userText || 'File(s) attached',
             attachments: [] as {type: string, data: string | ArrayBuffer, name: string}[]
         };
-
+    
         if (capturedImage) {
             userMessage.content.push({ type: 'image', source: { data: capturedImage } });
             currentMessageForHistory.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
@@ -103,7 +103,7 @@ export default function ChatPage() {
         }
         
         messageContent.push(userMessage);
-
+    
         const newHistory = [...chatHistory, currentMessageForHistory];
         setChatHistory(newHistory);
         
@@ -112,7 +112,7 @@ export default function ChatPage() {
         setAttachedFiles([]);
         
         setStatus('Thinking...');
-
+    
         try {
             const aiResponse = await puter.ai.chat(messageContent, { model: currentAgentId, max_tokens: 8192 });
             
@@ -131,17 +131,26 @@ export default function ChatPage() {
             }
             
             addMessage('ai', responseText);
-            
-            const finalHistoryForSave = [...newHistory, { role: 'ai', content: responseText }];
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
-            loadHistory(); 
-
+    
         } catch (error: any) {
             console.error("Error from AI:", error);
             const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
             addMessage('ai', 'Sorry, I encountered an error: ' + errorMessage);
         } finally {
             setStatus('Ready');
+        }
+    };
+
+    const handleSaveChat = async () => {
+        if (chatHistory.length === 0) return;
+        try {
+            setStatus('Saving...');
+            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(chatHistory, null, 2));
+            await loadHistory();
+            setStatus('Ready');
+        } catch (error) {
+            console.error('Error saving chat:', error);
+            setStatus('Error saving');
         }
     };
 
@@ -169,7 +178,7 @@ export default function ChatPage() {
     };
     
     const startNewChat = () => {
-        setChatHistory([]);
+        setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
         if(userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
@@ -288,37 +297,6 @@ export default function ChatPage() {
         setCanvasSize();
 
         let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
-
-        const startDrawing = (e: MouseEvent | TouchEvent) => {
-            if (!isDrawingActive) return;
-            e.preventDefault();
-            isDrawing = true;
-            const { x, y } = getCoords(e);
-            context.beginPath();
-            context.strokeStyle = brushColor;
-            context.lineWidth = 5;
-            context.lineCap = 'round';
-            context.lineJoin = 'round';
-            context.moveTo(x, y);
-            [lastX, lastY] = [x, y];
-        };
-        
-        const draw = (e: MouseEvent | TouchEvent) => {
-            if (!isDrawing || !isDrawingActive) return;
-            e.preventDefault();
-            const { x, y } = getCoords(e);
-            context.lineTo(x, y);
-            context.stroke();
-            [lastX, lastY] = [x, y];
-        };
-        
-        const stopDrawing = () => {
-            if (!isDrawing) return;
-            isDrawing = false;
-            context.beginPath();
-        };
 
         const getCoords = (e: MouseEvent | TouchEvent) => {
             const rect = canvas.getBoundingClientRect();
@@ -330,6 +308,33 @@ export default function ChatPage() {
                 x: (clientX - rect.left) * scaleX,
                 y: (clientY - rect.top) * scaleY
             };
+        };
+
+        const startDrawing = (e: MouseEvent | TouchEvent) => {
+            if (!isDrawingActive) return;
+            e.preventDefault();
+            isDrawing = true;
+            const { x, y } = getCoords(e);
+            context.beginPath();
+            context.lineWidth = 5;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.strokeStyle = brushColor;
+            context.moveTo(x, y);
+        };
+        
+        const draw = (e: MouseEvent | TouchEvent) => {
+            if (!isDrawing || !isDrawingActive) return;
+            e.preventDefault();
+            const { x, y } = getCoords(e);
+            context.lineTo(x, y);
+            context.stroke();
+        };
+        
+        const stopDrawing = () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            context.beginPath();
         };
 
         canvas.addEventListener('mousedown', startDrawing);
@@ -371,10 +376,8 @@ export default function ChatPage() {
             window.addEventListener('puter.loaded', handlePuterReady, { once: true });
         }
         
-        if (chatHistory.length === 0 && historyFiles.length > 0) {
-            // Nothing, wait for user to select a chat
-        } else if (chatHistory.length === 0) {
-            setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
+        if (chatHistory.length === 0) {
+             startNewChat();
         }
 
 
@@ -447,7 +450,13 @@ export default function ChatPage() {
                 <ResizablePanel defaultSize={80}>
                     <main className="flex-1 flex flex-col h-full">
                         <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
-                            <div className="font-bold">Infinity AI <span className="text-primary text-sm ml-2">{status}</span></div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold">Infinity AI</span>
+                                <Button onClick={handleSaveChat} size="icon" variant="ghost" title="Save Chat">
+                                    <Save className="h-5 w-5" />
+                                </Button>
+                                <span className="text-primary text-sm">{status}</span>
+                            </div>
                             <Select value={currentAgentId} onValueChange={setCurrentAgentId}>
                                 <SelectTrigger className="w-[280px]">
                                     <SelectValue placeholder="Select an AI Agent" />
