@@ -167,11 +167,18 @@ export default function ChatPage() {
         }
     };
     
-    const startNewChat = () => {
-        setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
+    const startNewChat = async () => {
+        const newChat = [{ role: 'ai', content: 'Hello! How can I help you today?' }];
+        setChatHistory(newChat);
         if(userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
+        try {
+            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(newChat, null, 2));
+            await loadHistory();
+        } catch (error) {
+            console.error("Could not save new chat", error);
+        }
     };
 
     // --- Attachment Functions ---
