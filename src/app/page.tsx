@@ -104,7 +104,8 @@ export default function ChatPage() {
         
         messageContent.push(userMessage);
 
-        setChatHistory(prev => [...prev, currentMessageForHistory]);
+        const newHistory = [...chatHistory, currentMessageForHistory];
+        setChatHistory(newHistory);
         
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
@@ -131,7 +132,7 @@ export default function ChatPage() {
             
             addMessage('ai', responseText);
             
-            const finalHistoryForSave = [...chatHistory, currentMessageForHistory, { role: 'ai', content: responseText }];
+            const finalHistoryForSave = [...newHistory, { role: 'ai', content: responseText }];
             await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(finalHistoryForSave, null, 2));
             loadHistory(); 
 
@@ -167,18 +168,11 @@ export default function ChatPage() {
         }
     };
     
-    const startNewChat = async () => {
-        const newChat = [{ role: 'ai', content: 'Hello! How can I help you today?' }];
-        setChatHistory(newChat);
+    const startNewChat = () => {
+        setChatHistory([]);
         if(userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
-        try {
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(newChat, null, 2));
-            await loadHistory();
-        } catch (error) {
-            console.error("Could not save new chat", error);
-        }
     };
 
     // --- Attachment Functions ---
@@ -363,9 +357,12 @@ export default function ChatPage() {
 
     React.useEffect(() => {
         const handlePuterReady = async () => {
-            await puter.auth.getUser(); 
-            startNewChat();
-            loadHistory(); 
+            try {
+              await puter.auth.getUser(); 
+              loadHistory(); 
+            } catch(e) {
+                // Not logged in
+            }
         };
 
         if (window.hasOwnProperty('puter')) {
@@ -373,6 +370,13 @@ export default function ChatPage() {
         } else {
             window.addEventListener('puter.loaded', handlePuterReady, { once: true });
         }
+        
+        if (chatHistory.length === 0 && historyFiles.length > 0) {
+            // Nothing, wait for user to select a chat
+        } else if (chatHistory.length === 0) {
+            setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
+        }
+
 
         return () => {
             window.removeEventListener('puter.loaded', handlePuterReady);
