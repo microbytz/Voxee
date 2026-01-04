@@ -22,7 +22,8 @@
     "tailwind-merge": "^2.4.0",
     "tailwindcss-animate": "^1.0.0",
     "react-resizable-panels": "^2.0.20",
-    "@radix-ui/react-scroll-area": "^1.1.0"
+    "@radix-ui/react-scroll-area": "^1.1.0",
+    "html-react-parser": "^5.1.10"
   },
   "devDependencies": {
     "@types/marked": "^6.0.0",

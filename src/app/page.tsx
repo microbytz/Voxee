@@ -2,11 +2,12 @@
 'use client';
 
 import React from 'react';
+import parse, { domToReact, HTMLReactParserOptions, Element } from 'html-react-parser';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AGENTS, Agent } from '@/lib/agents';
@@ -24,6 +25,35 @@ interface PuterFile {
     path: string;
     type: string;
 }
+
+const CodeBlock = ({ code }: { code: string }) => {
+    const [isCopied, setIsCopied] = React.useState(false);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(code);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+    };
+
+    return (
+        <div className="relative">
+            <pre>
+                <code>{code}</code>
+            </pre>
+            <Button
+                onClick={handleCopy}
+                size="icon"
+                variant="ghost"
+                className="absolute top-2 right-2 h-8 w-8 text-white/50 hover:text-white"
+                title="Copy code"
+            >
+                <Clipboard className="h-4 w-4" />
+            </Button>
+            {isCopied && <span className="absolute top-3 right-12 text-xs text-green-400">Copied!</span>}
+        </div>
+    );
+};
+
 
 export default function ChatPage() {
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any }[]>([]);
@@ -398,11 +428,27 @@ export default function ChatPage() {
 
     const renderMessageContent = (content: any) => {
         if (typeof content !== 'string') return null;
-        if (typeof marked === 'undefined') {
+        if (typeof marked === 'undefined' || typeof parse === 'undefined') {
             return <div className="whitespace-pre-wrap">{content}</div>;
         }
         const html = marked.parse(content);
-        return <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
+
+        const options: HTMLReactParserOptions = {
+            replace: (domNode) => {
+                if (domNode instanceof Element && domNode.name === 'pre') {
+                    const codeNode = domNode.children.find(
+                        (child) => child instanceof Element && child.name === 'code'
+                    ) as Element | undefined;
+
+                    if (codeNode) {
+                        const codeText = domToReact(codeNode.children).toString();
+                        return <CodeBlock code={codeText} />;
+                    }
+                }
+            },
+        };
+
+        return <div className="prose prose-invert max-w-none">{parse(html, options)}</div>;
     };
     
     const AttachmentPreview = ({ attachment }: { attachment: {type: string, data: any, name: string} }) => {
