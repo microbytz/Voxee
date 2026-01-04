@@ -163,6 +163,8 @@ export default function ChatPage() {
             setHistoryFiles(chatFiles);
         } catch (error: any) {
             console.error('Error loading history:', error);
+             // This indicates the user is likely not logged in
+            setHistoryFiles([]);
         }
     };
 
@@ -425,7 +427,7 @@ export default function ChatPage() {
                         </div>
                         <ScrollArea className="flex-1 overflow-y-auto p-2">
                             <div className="space-y-1">
-                                {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">No saved chats.</p>}
+                                {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">Log in to see history, or save a chat.</p>}
                                 {historyFiles.map(file => (
                                     <Button
                                         key={file.path}
@@ -589,3 +591,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
