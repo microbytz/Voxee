@@ -313,7 +313,6 @@ export default function ChatPage() {
         const startDrawing = (e: MouseEvent | TouchEvent) => {
             if (!isDrawingActive) return;
             e.preventDefault();
-            isDrawing = true;
             const { x, y } = getCoords(e);
             context.beginPath();
             context.lineWidth = 5;
@@ -321,6 +320,7 @@ export default function ChatPage() {
             context.lineJoin = 'round';
             context.strokeStyle = brushColor;
             context.moveTo(x, y);
+            isDrawing = true;
         };
         
         const draw = (e: MouseEvent | TouchEvent) => {
@@ -334,7 +334,6 @@ export default function ChatPage() {
         const stopDrawing = () => {
             if (!isDrawing) return;
             isDrawing = false;
-            context.beginPath();
         };
 
         canvas.addEventListener('mousedown', startDrawing);
