@@ -103,7 +103,6 @@ export default function ChatPage() {
 
         const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
         
-        // Start with the system prompt if one exists for the selected agent
         let messagePayload: any[] = [];
         if (selectedAgent && selectedAgent.systemPrompt) {
             messagePayload.push({ role: 'system', content: selectedAgent.systemPrompt });
@@ -111,9 +110,7 @@ export default function ChatPage() {
         
         // Add the entire chat history to the payload
         chatHistory.forEach(msg => {
-            // Puter.ai expects 'assistant' role for AI messages
             const role = msg.role === 'ai' ? 'assistant' : msg.role;
-            // For now, we only pass text content from history
             if (typeof msg.content === 'string') {
                 messagePayload.push({ role: role, content: msg.content });
             }
@@ -125,7 +122,6 @@ export default function ChatPage() {
             userMessageContent.push({ type: 'text', text: userText });
         }
         
-        // Prepare history entry for the user message
         const currentMessageForHistory = {
             role: 'user',
             content: userText || 'File(s) attached',
@@ -140,17 +136,14 @@ export default function ChatPage() {
         for (const file of attachedFiles) {
             const content = await file.read();
             userMessageContent.push({ type: 'text', text: `Attached file: ${file.name}` });
-            // A more robust implementation would handle different file types
             if (typeof content === 'string') {
                 userMessageContent.push({ type: 'text', text: content });
             }
             currentMessageForHistory.attachments.push({ type: file.type, data: content, name: file.name });
         }
         
-        // Add the new user message to the payload
         messagePayload.push({ role: 'user', content: userMessageContent });
         
-        // Update the chat history in the UI immediately
         const newHistory = [...chatHistory, currentMessageForHistory];
         setChatHistory(newHistory);
         
@@ -162,7 +155,6 @@ export default function ChatPage() {
         setStatus('Thinking...');
     
         try {
-            // Send the complete payload to the AI
             const aiResponse = await puter.ai.chat(messagePayload, { model: currentAgentId, max_tokens: 8192 });
             
             let responseText;
@@ -657,3 +649,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
