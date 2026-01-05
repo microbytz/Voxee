@@ -100,43 +100,61 @@ export default function ChatPage() {
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
-    
+
         const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
         
-        let messageContent: any = [];
+        // Start with the system prompt if one exists for the selected agent
+        let messagePayload: any[] = [];
         if (selectedAgent && selectedAgent.systemPrompt) {
-            messageContent.push({ role: 'system', content: selectedAgent.systemPrompt });
+            messagePayload.push({ role: 'system', content: selectedAgent.systemPrompt });
         }
-    
-        let userMessage: any = { role: 'user', content: [] };
-        if(userText) userMessage.content.push({ type: 'text', text: userText });
-    
+        
+        // Add the entire chat history to the payload
+        chatHistory.forEach(msg => {
+            // Puter.ai expects 'assistant' role for AI messages
+            const role = msg.role === 'ai' ? 'assistant' : msg.role;
+            // For now, we only pass text content from history
+            if (typeof msg.content === 'string') {
+                messagePayload.push({ role: role, content: msg.content });
+            }
+        });
+
+        // Prepare the content for the current user message
+        let userMessageContent: any[] = [];
+        if (userText) {
+            userMessageContent.push({ type: 'text', text: userText });
+        }
+        
+        // Prepare history entry for the user message
         const currentMessageForHistory = {
             role: 'user',
             content: userText || 'File(s) attached',
-            attachments: [] as {type: string, data: string | ArrayBuffer, name: string}[]
+            attachments: [] as { type: string, data: string | ArrayBuffer, name: string }[]
         };
-    
+
         if (capturedImage) {
-            userMessage.content.push({ type: 'image', source: { data: capturedImage } });
+            userMessageContent.push({ type: 'image', source: { data: capturedImage } });
             currentMessageForHistory.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
         }
         
         for (const file of attachedFiles) {
             const content = await file.read();
-            userMessage.content.push({ type: 'text', text: `Attached file: ${file.name}`});
+            userMessageContent.push({ type: 'text', text: `Attached file: ${file.name}` });
             // A more robust implementation would handle different file types
             if (typeof content === 'string') {
-                 userMessage.content.push({ type: 'text', text: content });
+                userMessageContent.push({ type: 'text', text: content });
             }
             currentMessageForHistory.attachments.push({ type: file.type, data: content, name: file.name });
         }
         
-        messageContent.push(userMessage);
-    
+        // Add the new user message to the payload
+        messagePayload.push({ role: 'user', content: userMessageContent });
+        
+        // Update the chat history in the UI immediately
         const newHistory = [...chatHistory, currentMessageForHistory];
         setChatHistory(newHistory);
         
+        // Clear inputs
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
@@ -144,7 +162,8 @@ export default function ChatPage() {
         setStatus('Thinking...');
     
         try {
-            const aiResponse = await puter.ai.chat(messageContent, { model: currentAgentId, max_tokens: 8192 });
+            // Send the complete payload to the AI
+            const aiResponse = await puter.ai.chat(messagePayload, { model: currentAgentId, max_tokens: 8192 });
             
             let responseText;
             
@@ -170,6 +189,7 @@ export default function ChatPage() {
             setStatus('Ready');
         }
     };
+
 
     const handleSaveChat = async () => {
         if (chatHistory.length === 0) return;
@@ -637,5 +657,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
