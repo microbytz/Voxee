@@ -106,25 +106,27 @@ export default function ChatPage() {
     
         const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
     
-        // 1. Prepare the payload for the AI API
+        // Create a deep copy for the API payload to avoid mutations
+        const historyForApi = JSON.parse(JSON.stringify(chatHistory));
         let messagePayload: any[] = [];
+    
         if (selectedAgent && selectedAgent.systemPrompt) {
             messagePayload.push({ role: 'system', content: selectedAgent.systemPrompt });
         }
     
         // Add previous messages from state
-        const historyForApi = JSON.parse(JSON.stringify(chatHistory));
         historyForApi.forEach((msg: any) => {
             const role = msg.role === 'ai' ? 'assistant' : msg.role;
             let content = msg.content;
             
+            // For the API, simplify content that isn't a string.
             if (typeof content !== 'string') {
                 content = "[attachment in history]";
             }
             messagePayload.push({ role, content });
         });
     
-        // 2. Prepare the user's current message object for chat history state
+        // Prepare the user's current message object for chat history state
         const currentUserMessage: { role: string; content: any; attachments: any[] } = {
             role: 'user',
             content: userText || 'File(s) attached',
@@ -143,14 +145,18 @@ export default function ChatPage() {
     
         for (const file of attachedFiles) {
             const content = await file.read();
+            // This is a simplified representation for the API.
+            // A more robust implementation might handle different file types differently.
             userMessageContentForApi.push({ type: 'text', text: `Attached file: ${file.name}\n\n${content}` });
             currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
         }
     
         messagePayload.push({ role: 'user', content: userMessageContentForApi });
     
+        // Update chat history with the new user message
         setChatHistory(prev => [...prev, currentUserMessage]);
     
+        // Clear inputs
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
@@ -162,6 +168,7 @@ export default function ChatPage() {
             
             let responseText;
             
+            // Handle various possible response formats from puter.ai
             if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 responseText = aiResponse.message.content;
             } else if (aiResponse && aiResponse.message && Array.isArray(aiResponse.message.content) && aiResponse.message.content[0]?.type === 'text') {
@@ -210,6 +217,7 @@ export default function ChatPage() {
             setHistoryFiles(chatFiles);
         } catch (error: any) {
             console.error('Error loading history:', error);
+            // If loading fails (e.g., not logged in), clear the list
             setHistoryFiles([]);
         }
     };
@@ -567,7 +575,7 @@ export default function ChatPage() {
                             {chatHistory.map((msg, index) => (
                                 <div key={index} className={`flex items-start gap-4`}>
                                 {msg.role === 'ai' && <Avatar><AvatarFallback><Bot /></AvatarFallback></Avatar>}
-                                    <div className={`p-4 rounded-lg max-w-2xl group relative ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary'}`}>
+                                    <div className={`p-4 rounded-lg max-w-2xl group relative ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary pr-12'}`}>
                                         {renderMessageContent(msg.content)}
                                         {msg.attachments?.map((att: any, i: number) => (
                                             <AttachmentPreview key={i} attachment={att} />
@@ -687,5 +695,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
