@@ -56,7 +56,7 @@ const CodeBlock = ({ code }: { code: string }) => {
 
 
 export default function ChatPage() {
-    const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any }[]>([]);
+    const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any, attachments?: any[] }[]>([]);
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
     const [currentAgentId, setCurrentAgentId] = React.useState<string>(AGENTS[0].id);
     const [status, setStatus] = React.useState<string>('Ready');
@@ -100,58 +100,66 @@ export default function ChatPage() {
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
-
+    
         const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
-        
+    
+        // 1. Prepare the payload for the AI API
         let messagePayload: any[] = [];
         if (selectedAgent && selectedAgent.systemPrompt) {
             messagePayload.push({ role: 'system', content: selectedAgent.systemPrompt });
         }
-        
-        // Add the entire chat history to the payload
+    
+        // Add previous messages from state
         chatHistory.forEach(msg => {
+            // Translate role for the API (ai -> assistant)
             const role = msg.role === 'ai' ? 'assistant' : msg.role;
-            if (typeof msg.content === 'string') {
-                messagePayload.push({ role: role, content: msg.content });
+            let content = msg.content;
+            
+            // The API expects a simple string for content in history
+            // We can add more complex logic here if we need to re-send attachments from history
+            if (typeof content !== 'string') {
+                 // For now, if content is not a string, let's just use a placeholder.
+                 // This simplifies the payload and avoids sending complex objects.
+                content = "[attachment in history]";
             }
+            messagePayload.push({ role, content });
         });
-
-        // Prepare the content for the current user message
-        let userMessageContent: any[] = [];
-        if (userText) {
-            userMessageContent.push({ type: 'text', text: userText });
-        }
-        
-        const currentMessageForHistory = {
+    
+        // 2. Prepare the user's current message object for chat history state
+        const currentUserMessage: { role: string; content: any; attachments: any[] } = {
             role: 'user',
             content: userText || 'File(s) attached',
-            attachments: [] as { type: string, data: string | ArrayBuffer, name: string }[]
+            attachments: []
         };
-
-        if (capturedImage) {
-            userMessageContent.push({ type: 'image', source: { data: capturedImage } });
-            currentMessageForHistory.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
+    
+        let userMessageContentForApi: any[] = [];
+        if (userText) {
+            userMessageContentForApi.push({ type: 'text', text: userText });
         }
-        
+    
+        if (capturedImage) {
+            userMessageContentForApi.push({ type: 'image', source: { data: capturedImage } });
+            currentUserMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
+        }
+    
         for (const file of attachedFiles) {
             const content = await file.read();
-            userMessageContent.push({ type: 'text', text: `Attached file: ${file.name}` });
-            if (typeof content === 'string') {
-                userMessageContent.push({ type: 'text', text: content });
-            }
-            currentMessageForHistory.attachments.push({ type: file.type, data: content, name: file.name });
+            // For the API, we can describe the file or include its content
+            userMessageContentForApi.push({ type: 'text', text: `Attached file: ${file.name}\n\n${content}` });
+            currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
         }
-        
-        messagePayload.push({ role: 'user', content: userMessageContent });
-        
-        const newHistory = [...chatHistory, currentMessageForHistory];
-        setChatHistory(newHistory);
-        
+    
+        // Add the current message to the API payload
+        messagePayload.push({ role: 'user', content: userMessageContentForApi });
+    
+        // 3. Update the chat history state with the new user message
+        setChatHistory(prev => [...prev, currentUserMessage]);
+    
         // Clear inputs
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
-        
+    
         setStatus('Thinking...');
     
         try {
@@ -187,7 +195,9 @@ export default function ChatPage() {
         if (chatHistory.length === 0) return;
         try {
             setStatus('Saving...');
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(chatHistory, null, 2));
+            // Create a deep copy to ensure no mutation issues
+            const historyToSave = JSON.parse(JSON.stringify(chatHistory));
+            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(historyToSave, null, 2));
             await loadHistory();
             setStatus('Ready');
         } catch (error) {
@@ -217,7 +227,7 @@ export default function ChatPage() {
             setChatHistory(loadedHistory);
         } catch (error: any) {
             console.error('Error viewing chat:', error);
-            alert('Error loading chat.');
+            alert('Error loading chat file. It might be corrupted.');
         }
     };
     
@@ -406,10 +416,12 @@ export default function ChatPage() {
     React.useEffect(() => {
         const handlePuterReady = async () => {
             try {
+              // Check if logged in. This will throw if not.
               await puter.auth.getUser(); 
               loadHistory(); 
             } catch(e) {
-                // Not logged in
+                // Not logged in, ensure history is cleared
+                setHistoryFiles([]);
             }
         };
 
@@ -422,7 +434,6 @@ export default function ChatPage() {
         if (chatHistory.length === 0) {
              startNewChat();
         }
-
 
         return () => {
             window.removeEventListener('puter.loaded', handlePuterReady);
@@ -452,8 +463,8 @@ export default function ChatPage() {
                         (child) => child instanceof Element && child.name === 'code'
                     ) as Element | undefined;
 
-                    if (codeNode) {
-                        const codeText = domToReact(codeNode.children).toString();
+                    if (codeNode && codeNode.children[0]) {
+                        const codeText = (codeNode.children[0] as any).data;
                         return <CodeBlock code={codeText} />;
                     }
                 }
@@ -541,7 +552,7 @@ export default function ChatPage() {
                                 {msg.role === 'ai' && <Avatar><AvatarFallback><Bot /></AvatarFallback></Avatar>}
                                     <div className={`p-4 rounded-lg max-w-2xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary'}`}>
                                         {renderMessageContent(msg.content)}
-                                        {(msg as any).attachments?.map((att: any, i: number) => (
+                                        {msg.attachments?.map((att: any, i: number) => (
                                             <AttachmentPreview key={i} attachment={att} />
                                         ))}
                                     </div>
@@ -649,5 +660,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
