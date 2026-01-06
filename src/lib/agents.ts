@@ -23,7 +23,7 @@ export const AGENTS: Agent[] = [
     id: 'anthropic/claude-3.5-sonnet',
     name: 'Claude 3.5 Sonnet (Logic)',
     provider: 'Anthropic',
-    system_prompt: 'You are a logical tutor. Explain your reasoning process clearly and carefully. Always provide detailed, step-by-step explanations for your conclusions to help the user learn.',
+    systemPrompt: 'You are a logical tutor. Explain your reasoning process clearly and carefully. Always provide detailed, step-by-step explanations for your conclusions to help the user learn.',
   },
   {
     id: 'anthropic/claude-3-opus',
