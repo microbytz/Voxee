@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard, Volume2, VolumeX } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AGENTS, Agent } from '@/lib/agents';
@@ -72,6 +72,9 @@ export default function ChatPage() {
     const [brushColor, setBrushColor] = React.useState('#FF0000'); // Default to red
     const [isDrawingActive, setIsDrawingActive] = React.useState(false);
 
+    // TTS State
+    const [speakingMessageIndex, setSpeakingMessageIndex] = React.useState<number | null>(null);
+
 
     const chatWindowRef = React.useRef<HTMLDivElement>(null);
     const userInputRef = React.useRef<HTMLInputElement>(null);
@@ -110,16 +113,12 @@ export default function ChatPage() {
         }
     
         // Add previous messages from state
-        chatHistory.forEach(msg => {
-            // Translate role for the API (ai -> assistant)
+        const historyForApi = JSON.parse(JSON.stringify(chatHistory));
+        historyForApi.forEach((msg: any) => {
             const role = msg.role === 'ai' ? 'assistant' : msg.role;
             let content = msg.content;
             
-            // The API expects a simple string for content in history
-            // We can add more complex logic here if we need to re-send attachments from history
             if (typeof content !== 'string') {
-                 // For now, if content is not a string, let's just use a placeholder.
-                 // This simplifies the payload and avoids sending complex objects.
                 content = "[attachment in history]";
             }
             messagePayload.push({ role, content });
@@ -144,18 +143,14 @@ export default function ChatPage() {
     
         for (const file of attachedFiles) {
             const content = await file.read();
-            // For the API, we can describe the file or include its content
             userMessageContentForApi.push({ type: 'text', text: `Attached file: ${file.name}\n\n${content}` });
             currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
         }
     
-        // Add the current message to the API payload
         messagePayload.push({ role: 'user', content: userMessageContentForApi });
     
-        // 3. Update the chat history state with the new user message
         setChatHistory(prev => [...prev, currentUserMessage]);
     
-        // Clear inputs
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
@@ -215,7 +210,6 @@ export default function ChatPage() {
             setHistoryFiles(chatFiles);
         } catch (error: any) {
             console.error('Error loading history:', error);
-             // This indicates the user is likely not logged in
             setHistoryFiles([]);
         }
     };
@@ -333,6 +327,28 @@ export default function ChatPage() {
         }
     };
 
+    // --- TTS Function ---
+    const handleSpeak = (text: string, index: number) => {
+        if (typeof window === 'undefined' || !window.speechSynthesis) {
+            alert('Your browser does not support text-to-speech.');
+            return;
+        }
+
+        if (speakingMessageIndex === index) {
+            window.speechSynthesis.cancel();
+            setSpeakingMessageIndex(null);
+        } else {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.onend = () => {
+                setSpeakingMessageIndex(null);
+            };
+            setSpeakingMessageIndex(index);
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+
+
     React.useEffect(() => {
         const canvas = canvasRef.current;
         const video = videoRef.current;
@@ -438,6 +454,7 @@ export default function ChatPage() {
         return () => {
             window.removeEventListener('puter.loaded', handlePuterReady);
             stopCamera();
+            window.speechSynthesis?.cancel();
         }
     }, []);
 
@@ -550,11 +567,21 @@ export default function ChatPage() {
                             {chatHistory.map((msg, index) => (
                                 <div key={index} className={`flex items-start gap-4`}>
                                 {msg.role === 'ai' && <Avatar><AvatarFallback><Bot /></AvatarFallback></Avatar>}
-                                    <div className={`p-4 rounded-lg max-w-2xl ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary'}`}>
+                                    <div className={`p-4 rounded-lg max-w-2xl group relative ${msg.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-secondary'}`}>
                                         {renderMessageContent(msg.content)}
                                         {msg.attachments?.map((att: any, i: number) => (
                                             <AttachmentPreview key={i} attachment={att} />
                                         ))}
+                                        {msg.role === 'ai' && typeof msg.content === 'string' && (
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground"
+                                                onClick={() => handleSpeak(msg.content, index)}
+                                            >
+                                                {speakingMessageIndex === index ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                                            </Button>
+                                        )}
                                     </div>
                                 {msg.role === 'user' && <Avatar><AvatarFallback className="bg-primary text-primary-foreground"><User /></AvatarFallback></Avatar>}
                                 </div>
@@ -660,3 +687,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
