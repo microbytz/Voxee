@@ -511,8 +511,8 @@ export default function ChatPage() {
                         (child) => child instanceof Element && child.name === 'code'
                     ) as Element | undefined;
 
-                    if (codeNode && codeNode.children[0]) {
-                        const codeText = (codeNode.children[0] as any).data;
+                    if (codeNode && codeNode.children[0] && codeNode.children[0].type === 'text') {
+                        const codeText = codeNode.children[0].data;
                         const lang = codeNode.attribs.class?.replace('language-', '') || '';
                         return <CodeBlock code={codeText} lang={lang} />;
                     }
