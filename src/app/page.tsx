@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard, Volume2, VolumeX } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard, Volume2, VolumeX, Play } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AGENTS, Agent } from '@/lib/agents';
@@ -26,8 +26,9 @@ interface PuterFile {
     type: string;
 }
 
-const CodeBlock = ({ code }: { code: string }) => {
+const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
     const [isCopied, setIsCopied] = React.useState(false);
+    const isPreviewable = ['html', 'javascript', 'js', 'css'].includes(lang);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(code);
@@ -35,21 +36,43 @@ const CodeBlock = ({ code }: { code: string }) => {
         setTimeout(() => setIsCopied(false), 2000);
     };
 
+    const handlePreview = () => {
+        try {
+            puter.ui.showHtml(code);
+        } catch (error) {
+            console.error("Error showing preview:", error);
+            alert("Could not display preview. The code may not be valid HTML.");
+        }
+    };
+
     return (
         <div className="relative">
             <pre>
                 <code>{code}</code>
             </pre>
-            <Button
-                onClick={handleCopy}
-                size="icon"
-                variant="ghost"
-                className="absolute top-2 right-2 h-8 w-8 text-white/50 hover:text-white"
-                title="Copy code"
-            >
-                <Clipboard className="h-4 w-4" />
-            </Button>
-            {isCopied && <span className="absolute top-3 right-12 text-xs text-green-400">Copied!</span>}
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+                {isPreviewable && (
+                    <Button
+                        onClick={handlePreview}
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-white/50 hover:text-white"
+                        title="Preview Code"
+                    >
+                        <Play className="h-4 w-4" />
+                    </Button>
+                )}
+                <Button
+                    onClick={handleCopy}
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-white/50 hover:text-white"
+                    title="Copy code"
+                >
+                    <Clipboard className="h-4 w-4" />
+                </Button>
+                {isCopied && <span className="text-xs text-green-400">Copied!</span>}
+            </div>
         </div>
     );
 };
@@ -490,7 +513,8 @@ export default function ChatPage() {
 
                     if (codeNode && codeNode.children[0]) {
                         const codeText = (codeNode.children[0] as any).data;
-                        return <CodeBlock code={codeText} />;
+                        const lang = codeNode.attribs.class?.replace('language-', '') || '';
+                        return <CodeBlock code={codeText} lang={lang} />;
                     }
                 }
             },
@@ -695,3 +719,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
