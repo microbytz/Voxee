@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard, Volume2, VolumeX, Play } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard, Volume2, VolumeX, Play, PlusCircle } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AGENTS, Agent } from '@/lib/agents';
+import { AGENTS as DEFAULT_AGENTS, Agent } from '@/lib/agents';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { AddModelsSheet } from '@/components/AddModelsSheet';
+import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
 
 
 // Since puter.js and marked.js are loaded via script tags, we need to declare them to TypeScript
@@ -81,7 +83,11 @@ const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
 export default function ChatPage() {
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any, attachments?: any[] }[]>([]);
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
-    const [currentAgentId, setCurrentAgentId] = React.useState<string>(AGENTS[0].id);
+    
+    // Agent state
+    const [agents, setAgents] = React.useState<Agent[]>(DEFAULT_AGENTS);
+    const [currentAgentId, setCurrentAgentId] = React.useState<string>(DEFAULT_AGENTS[0].id);
+
     const [status, setStatus] = React.useState<string>('Ready');
     
     // Attachments State
@@ -98,6 +104,9 @@ export default function ChatPage() {
     // TTS State
     const [speakingMessageIndex, setSpeakingMessageIndex] = React.useState<number | null>(null);
 
+    // Add Models Sheet state
+    const [isAddModelsSheetOpen, setIsAddModelsSheetOpen] = React.useState(false);
+
 
     const chatWindowRef = React.useRef<HTMLDivElement>(null);
     const userInputRef = React.useRef<HTMLInputElement>(null);
@@ -106,7 +115,7 @@ export default function ChatPage() {
     const streamRef = React.useRef<MediaStream | null>(null);
     
     const agentProviders = React.useMemo(() => {
-        const providers = AGENTS.reduce((acc, agent) => {
+        const providers = agents.reduce((acc, agent) => {
             if (!acc[agent.provider]) {
                 acc[agent.provider] = [];
             }
@@ -114,7 +123,7 @@ export default function ChatPage() {
             return acc;
         }, {} as Record<string, Agent[]>);
         return Object.entries(providers);
-    }, []);
+    }, [agents]);
 
 
     // --- Core Functions ---
@@ -127,7 +136,7 @@ export default function ChatPage() {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
     
-        const selectedAgent = AGENTS.find(agent => agent.id === currentAgentId);
+        const selectedAgent = agents.find(agent => agent.id === currentAgentId);
     
         // Create a deep copy for the API payload to avoid mutations
         const historyForApi = JSON.parse(JSON.stringify(chatHistory));
@@ -379,6 +388,16 @@ export default function ChatPage() {
         }
     };
 
+    // --- Agent Management ---
+    const handleAgentsUpdated = (updatedAgents: Agent[]) => {
+        const newAgentList = [...DEFAULT_AGENTS, ...updatedAgents];
+        setAgents(newAgentList);
+        saveUserAgents(updatedAgents);
+        if (!newAgentList.find(a => a.id === currentAgentId)) {
+            setCurrentAgentId(newAgentList[0].id);
+        }
+    };
+
 
     React.useEffect(() => {
         const canvas = canvasRef.current;
@@ -461,6 +480,12 @@ export default function ChatPage() {
     // --- Effects ---
 
     React.useEffect(() => {
+        // Load user-defined agents from local storage on startup
+        const userAgents = getUserAgents();
+        if (userAgents.length > 0) {
+            setAgents([...DEFAULT_AGENTS, ...userAgents]);
+        }
+        
         const handlePuterReady = async () => {
             try {
               // Check if logged in. This will throw if not.
@@ -506,14 +531,15 @@ export default function ChatPage() {
 
         const options: HTMLReactParserOptions = {
             replace: (domNode) => {
-                if (domNode instanceof Element && domNode.name === 'pre') {
+                if (domNode instanceof Element && domNode.tagName === 'pre') {
                     const codeNode = domNode.children.find(
-                        (child) => child instanceof Element && child.name === 'code'
+                        (child) => child instanceof Element && child.tagName === 'code'
                     ) as Element | undefined;
 
-                    if (codeNode && codeNode.children[0] && codeNode.children[0].type === 'text') {
+                    if (codeNode && codeNode.children.length > 0 && codeNode.children[0].type === 'text') {
                         const codeText = codeNode.children[0].data;
-                        const lang = codeNode.attribs.class?.replace('language-', '') || '';
+                        const langClass = codeNode.attribs.class || '';
+                        const lang = langClass.startsWith('language-') ? langClass.replace('language-', '') : '';
                         return <CodeBlock code={codeText} lang={lang} />;
                     }
                 }
@@ -573,6 +599,9 @@ export default function ChatPage() {
                                 <span className="font-bold">Infinity AI</span>
                                 <Button onClick={handleSaveChat} size="icon" variant="ghost" title="Save Chat">
                                     <Save className="h-5 w-5" />
+                                </Button>
+                                 <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models">
+                                    <PlusCircle className="h-5 w-5" />
                                 </Button>
                                 <span className="text-primary text-sm">{status}</span>
                             </div>
@@ -716,6 +745,13 @@ export default function ChatPage() {
                     </main>
                 </ResizablePanel>
             </ResizablePanelGroup>
+
+             <AddModelsSheet
+                isOpen={isAddModelsSheetOpen}
+                onOpenChange={setIsAddModelsSheetOpen}
+                currentAgents={agents}
+                onAgentsUpdated={handleAgentsUpdated}
+            />
         </div>
     );
 }
