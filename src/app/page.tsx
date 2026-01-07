@@ -56,7 +56,7 @@ const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
                         onClick={handlePreview}
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 text-white/50 hover:text-white"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
                         title="Preview Code"
                     >
                         <Play className="h-4 w-4" />
@@ -66,7 +66,7 @@ const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
                     onClick={handleCopy}
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 text-white/50 hover:text-white"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                     title="Copy code"
                 >
                     <Clipboard className="h-4 w-4" />
@@ -719,5 +719,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
