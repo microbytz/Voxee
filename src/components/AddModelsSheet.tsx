@@ -37,7 +37,7 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
                 setIsLoading(true);
                 setError(null);
                 try {
-                    const models = await puter.ai.getModels();
+                    const models = await puter.ai.models();
                     setAllModels(models);
                     
                     const initialSelected = new Set(currentAgents.map(a => a.id));
@@ -147,6 +147,3 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
         </Sheet>
     );
 }
-
-
-    
