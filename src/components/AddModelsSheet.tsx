@@ -37,7 +37,8 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
                 setIsLoading(true);
                 setError(null);
                 try {
-                    const models = await puter.ai.models();
+                    // Correct API call based on user's example
+                    const models = await puter.ai.listModels();
                     setAllModels(models);
                     
                     const initialSelected = new Set(currentAgents.map(a => a.id));
@@ -76,8 +77,7 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
                 systemPrompt: `You are ${model.name || model.id}.`, // Default prompt
             }));
         
-        // We only want to save the agents that are NOT in the default list
-        const defaultAgentIds = new Set(['gpt-5-nano', 'gpt-4o-mini', 'anthropic/claude-3.5-sonnet', 'anthropic/claude-3-opus', 'anthropic/claude-3-haiku', 'gemini-2.0-flash', 'gemini-1.5-pro', 'deepseek-chat', 'togetherai:meta-llama/meta-llama-3.1-70b-instruct-turbo', 'mistral-large', 'mixtral-8x7b']);
+        const defaultAgentIds = new Set(DEFAULT_AGENTS.map(a => a.id));
         const agentsToSave = userSelectedAgents.filter(agent => !defaultAgentIds.has(agent.id));
         
         onAgentsUpdated(agentsToSave);
@@ -147,3 +147,5 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
         </Sheet>
     );
 }
+
+    

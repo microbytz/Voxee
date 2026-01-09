@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Save, Clipboard, Volume2, VolumeX, Play, PlusCircle } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AGENTS as DEFAULT_AGENTS, Agent } from '@/lib/agents';
+import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddModelsSheet } from '@/components/AddModelsSheet';
@@ -83,6 +83,7 @@ const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
 export default function ChatPage() {
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any, attachments?: any[] }[]>([]);
     const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
+    const [currentChatFile, setCurrentChatFile] = React.useState<string | null>(null);
     
     // Agent state
     const [agents, setAgents] = React.useState<Agent[]>(DEFAULT_AGENTS);
@@ -127,9 +128,8 @@ export default function ChatPage() {
 
 
     // --- Core Functions ---
-
-    const addMessage = (role: string, content: any) => {
-        setChatHistory(prev => [...prev, { role, content }]);
+    const addMessage = (role: string, content: any, attachments?: any[]) => {
+        setChatHistory(prev => [...prev, { role, content, attachments }]);
     };
     
     const handleSend = async () => {
@@ -151,14 +151,12 @@ export default function ChatPage() {
             const role = msg.role === 'ai' ? 'assistant' : msg.role;
             let content = msg.content;
             
-            // For the API, simplify content that isn't a string.
             if (typeof content !== 'string') {
                 content = "[attachment in history]";
             }
             messagePayload.push({ role, content });
         });
     
-        // Prepare the user's current message object for chat history state
         const currentUserMessage: { role: string; content: any; attachments: any[] } = {
             role: 'user',
             content: userText || 'File(s) attached',
@@ -177,18 +175,14 @@ export default function ChatPage() {
     
         for (const file of attachedFiles) {
             const content = await file.read();
-            // This is a simplified representation for the API.
-            // A more robust implementation might handle different file types differently.
             userMessageContentForApi.push({ type: 'text', text: `Attached file: ${file.name}\n\n${content}` });
             currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
         }
     
         messagePayload.push({ role: 'user', content: userMessageContentForApi });
     
-        // Update chat history with the new user message
         setChatHistory(prev => [...prev, currentUserMessage]);
     
-        // Clear inputs
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
@@ -200,7 +194,6 @@ export default function ChatPage() {
             
             let responseText;
             
-            // Handle various possible response formats from puter.ai
             if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
                 responseText = aiResponse.message.content;
             } else if (aiResponse && aiResponse.message && Array.isArray(aiResponse.message.content) && aiResponse.message.content[0]?.type === 'text') {
@@ -213,29 +206,37 @@ export default function ChatPage() {
                  throw new Error("The AI returned a response in an unexpected format: " + JSON.stringify(aiResponse));
             }
             
-            addMessage('ai', responseText);
+            // Add AI response to history
+            const newHistory = [...chatHistory, currentUserMessage, { role: 'ai', content: responseText }];
+            setChatHistory(newHistory);
+
+            // Auto-save after response
+            await autoSaveChat(newHistory);
+            
+            setStatus('Ready');
     
         } catch (error: any) {
             console.error("Error from AI:", error);
             const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
-            addMessage('ai', 'Sorry, I encountered an error: ' + errorMessage);
-        } finally {
+            setChatHistory(prev => [...prev, { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }]);
             setStatus('Ready');
         }
     };
 
-
-    const handleSaveChat = async () => {
-        if (chatHistory.length === 0) return;
+    const autoSaveChat = async (history: any[]) => {
+         if (history.length === 0) return;
+        const fileName = currentChatFile || `Chat_${Date.now()}.json`;
+        if (!currentChatFile) {
+            setCurrentChatFile(fileName);
+        }
         try {
-            setStatus('Saving...');
-            // Create a deep copy to ensure no mutation issues
-            const historyToSave = JSON.parse(JSON.stringify(chatHistory));
-            await puter.fs.write(`Chat_${Date.now()}.json`, JSON.stringify(historyToSave, null, 2));
+            setStatus('Syncing...');
+            const historyToSave = JSON.parse(JSON.stringify(history));
+            await puter.fs.write(fileName, JSON.stringify(historyToSave, null, 2));
             await loadHistory();
             setStatus('Ready');
         } catch (error) {
-            console.error('Error saving chat:', error);
+            console.error('Error auto-saving chat:', error);
             setStatus('Error saving');
         }
     };
@@ -249,7 +250,6 @@ export default function ChatPage() {
             setHistoryFiles(chatFiles);
         } catch (error: any) {
             console.error('Error loading history:', error);
-            // If loading fails (e.g., not logged in), clear the list
             setHistoryFiles([]);
         }
     };
@@ -259,6 +259,7 @@ export default function ChatPage() {
             const content = await puter.fs.read(file.path);
             const loadedHistory = JSON.parse(content as string);
             setChatHistory(loadedHistory);
+            setCurrentChatFile(file.name);
         } catch (error: any) {
             console.error('Error viewing chat:', error);
             alert('Error loading chat file. It might be corrupted.');
@@ -270,6 +271,7 @@ export default function ChatPage() {
         if(userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
+        setCurrentChatFile(null); // This is now a new chat
     };
 
     // --- Attachment Functions ---
@@ -348,9 +350,7 @@ export default function ChatPage() {
             const finalContext = finalCanvas.getContext('2d');
             
             if(finalContext){
-                // Draw video frame
                 finalContext.drawImage(video, 0, 0, finalCanvas.width, finalCanvas.height);
-                // Draw drawings from the other canvas on top
                 finalContext.drawImage(canvas, 0, 0, finalCanvas.width, finalCanvas.height);
                 
                 const dataUri = finalCanvas.toDataURL('image/jpeg');
@@ -480,7 +480,6 @@ export default function ChatPage() {
     // --- Effects ---
 
     React.useEffect(() => {
-        // Load user-defined agents from local storage on startup
         const userAgents = getUserAgents();
         if (userAgents.length > 0) {
             setAgents([...DEFAULT_AGENTS, ...userAgents]);
@@ -488,11 +487,9 @@ export default function ChatPage() {
         
         const handlePuterReady = async () => {
             try {
-              // Check if logged in. This will throw if not.
               await puter.auth.getUser(); 
               loadHistory(); 
             } catch(e) {
-                // Not logged in, ensure history is cleared
                 setHistoryFiles([]);
             }
         };
@@ -597,9 +594,6 @@ export default function ChatPage() {
                         <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
                             <div className="flex items-center gap-2">
                                 <span className="font-bold">Infinity AI</span>
-                                <Button onClick={handleSaveChat} size="icon" variant="ghost" title="Save Chat">
-                                    <Save className="h-5 w-5" />
-                                </Button>
                                  <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models">
                                     <PlusCircle className="h-5 w-5" />
                                 </Button>
@@ -755,5 +749,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
