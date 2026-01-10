@@ -209,10 +209,6 @@ export default function ChatPage() {
             // Add AI response to history
             const newHistory = [...chatHistory, currentUserMessage, { role: 'ai', content: responseText }];
             setChatHistory(newHistory);
-
-            // Auto-save after response
-            await autoSaveChat(newHistory);
-            
             setStatus('Ready');
     
         } catch (error: any) {
@@ -223,20 +219,20 @@ export default function ChatPage() {
         }
     };
 
-    const autoSaveChat = async (history: any[]) => {
-         if (history.length === 0) return;
+    const handleSaveChat = async () => {
+         if (chatHistory.length === 0) return;
         const fileName = currentChatFile || `Chat_${Date.now()}.json`;
         if (!currentChatFile) {
             setCurrentChatFile(fileName);
         }
         try {
             setStatus('Syncing...');
-            const historyToSave = JSON.parse(JSON.stringify(history));
+            const historyToSave = JSON.parse(JSON.stringify(chatHistory));
             await puter.fs.write(fileName, JSON.stringify(historyToSave, null, 2));
             await loadHistory();
             setStatus('Ready');
         } catch (error) {
-            console.error('Error auto-saving chat:', error);
+            console.error('Error saving chat:', error);
             setStatus('Error saving');
         }
     };
@@ -581,7 +577,10 @@ export default function ChatPage() {
                                 ))}
                             </div>
                         </ScrollArea>
-                        <div className="p-2 border-t border-border">
+                        <div className="p-2 border-t border-border space-y-2">
+                             <Button className="w-full" variant="outline" onClick={handleSaveChat}>
+                                Save Chat
+                            </Button>
                             <Button className="w-full" onClick={startNewChat}>
                                 New Chat
                             </Button>
@@ -749,3 +748,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
