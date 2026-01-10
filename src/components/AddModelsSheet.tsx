@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Agent } from '@/lib/agents';
+import { Agent, DEFAULT_AGENTS } from '@/lib/agents';
 import { Loader2 } from 'lucide-react';
 
 declare const puter: any;
@@ -147,5 +147,3 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
         </Sheet>
     );
 }
-
-    
