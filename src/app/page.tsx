@@ -181,8 +181,9 @@ export default function ChatPage() {
     
         messagePayload.push({ role: 'user', content: userMessageContentForApi });
     
-        setChatHistory(prev => [...prev, currentUserMessage]);
-    
+        const newHistoryWithUser = [...chatHistory, currentUserMessage];
+        setChatHistory(newHistoryWithUser);
+
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
@@ -207,8 +208,8 @@ export default function ChatPage() {
             }
             
             // Add AI response to history
-            const newHistory = [...chatHistory, currentUserMessage, { role: 'ai', content: responseText }];
-            setChatHistory(newHistory);
+            const finalHistory = [...newHistoryWithUser, { role: 'ai', content: responseText }];
+            setChatHistory(finalHistory);
             setStatus('Ready');
     
         } catch (error: any) {
@@ -220,7 +221,7 @@ export default function ChatPage() {
     };
 
     const handleSaveChat = async () => {
-         if (chatHistory.length === 0) return;
+        if (chatHistory.length === 0) return;
         const fileName = currentChatFile || `Chat_${Date.now()}.json`;
         if (!currentChatFile) {
             setCurrentChatFile(fileName);
@@ -748,5 +749,7 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
 
     
