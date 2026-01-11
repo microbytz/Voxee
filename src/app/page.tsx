@@ -254,12 +254,15 @@ export default function ChatPage() {
     const viewChat = async (file: { name: string, path: string }) => {
         try {
             const content = await puter.fs.read(file.path);
-            const loadedHistory = JSON.parse(content as string);
+            if (typeof content !== 'string') {
+                throw new Error('Chat file is not a valid text file.');
+            }
+            const loadedHistory = JSON.parse(content);
             setChatHistory(loadedHistory);
             setCurrentChatFile(file.name);
         } catch (error: any) {
             console.error('Error viewing chat:', error);
-            alert('Error loading chat file. It might be corrupted.');
+            alert('Error loading chat file. It might be corrupted or in an invalid format.');
         }
     };
     
@@ -749,7 +752,5 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
 
     
