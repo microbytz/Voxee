@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import Draggable from 'react-draggable';
+
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
@@ -107,6 +111,9 @@ export default function ChatPage() {
 
     // Add Models Sheet state
     const [isAddModelsSheetOpen, setIsAddModelsSheetOpen] = React.useState(false);
+    
+    // App Launcher State
+    const [appLauncherState, setAppLauncherState] = React.useState<{isOpen: boolean; url: string; name: string} | null>(null);
 
 
     const chatWindowRef = React.useRef<HTMLDivElement>(null);
@@ -114,6 +121,7 @@ export default function ChatPage() {
     const videoRef = React.useRef<HTMLVideoElement>(null);
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
     const streamRef = React.useRef<MediaStream | null>(null);
+    const draggableNodeRef = React.useRef(null);
     
     const agentProviders = React.useMemo(() => {
         const providers = agents.reduce((acc, agent) => {
@@ -210,6 +218,7 @@ export default function ChatPage() {
             // Add AI response to history
             const finalHistory = [...newHistoryWithUser, { role: 'ai', content: responseText }];
             setChatHistory(finalHistory);
+            handleSaveChat(finalHistory); // Auto-save after response
             setStatus('Ready');
     
         } catch (error: any) {
@@ -220,15 +229,14 @@ export default function ChatPage() {
         }
     };
 
-    const handleSaveChat = async () => {
-        if (chatHistory.length === 0) return;
+    const handleSaveChat = async (historyToSave: any[]) => {
+        if (!historyToSave || historyToSave.length === 0) return;
         const fileName = currentChatFile || `Chat_${Date.now()}.json`;
         if (!currentChatFile) {
             setCurrentChatFile(fileName);
         }
         try {
             setStatus('Syncing...');
-            const historyToSave = JSON.parse(JSON.stringify(chatHistory));
             await puter.fs.write(fileName, JSON.stringify(historyToSave, null, 2));
             await loadHistory();
             setStatus('Ready');
@@ -396,6 +404,18 @@ export default function ChatPage() {
         if (!newAgentList.find(a => a.id === currentAgentId)) {
             setCurrentAgentId(newAgentList[0].id);
         }
+    };
+    
+    // --- App Launcher ---
+    const apps = [
+        { name: 'Google', url: 'https://www.google.com/search?igu=1' },
+        { name: 'Google Drive', url: 'https://drive.google.com/' },
+        { name: 'Google Sheets', url: 'https://docs.google.com/spreadsheets/' },
+        { name: 'Google Docs', url: 'https://docs.google.com/document/' },
+    ];
+    
+    const launchApp = (url: string, name: string) => {
+        setAppLauncherState({ isOpen: true, url, name });
     };
 
 
@@ -568,7 +588,7 @@ export default function ChatPage() {
                         </div>
                         <ScrollArea className="flex-1 overflow-y-auto p-2">
                             <div className="space-y-1">
-                                {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">Log in to see history, or save a chat.</p>}
+                                {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">Log in to see history.</p>}
                                 {historyFiles.map(file => (
                                     <Button
                                         key={file.path}
@@ -582,9 +602,6 @@ export default function ChatPage() {
                             </div>
                         </ScrollArea>
                         <div className="p-2 border-t border-border space-y-2">
-                             <Button className="w-full" variant="outline" onClick={handleSaveChat}>
-                                Save Chat
-                            </Button>
                             <Button className="w-full" onClick={startNewChat}>
                                 New Chat
                             </Button>
@@ -600,6 +617,20 @@ export default function ChatPage() {
                                  <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models">
                                     <PlusCircle className="h-5 w-5" />
                                 </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" title="Launch App">
+                                            <AppWindow className="h-5 w-5" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        {apps.map(app => (
+                                            <DropdownMenuItem key={app.name} onClick={() => launchApp(app.url, app.name)}>
+                                                {app.name}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                                 <span className="text-primary text-sm">{status}</span>
                             </div>
                             <Select value={currentAgentId} onValueChange={setCurrentAgentId}>
@@ -684,6 +715,25 @@ export default function ChatPage() {
                                     </Button>
                                 </div>
                             </div>
+                        )}
+
+                         {/* App Launcher Window */}
+                        {appLauncherState?.isOpen && (
+                            <Draggable nodeRef={draggableNodeRef} handle=".draggable-handle">
+                                <div ref={draggableNodeRef} className="fixed top-1/4 left-1/4 z-50">
+                                    <Dialog open onOpenChange={(open) => !open && setAppLauncherState(null)}>
+                                        <DialogContent className="p-0 border-2 shadow-2xl w-[800px] h-[600px] flex flex-col gap-0 !rounded-lg overflow-hidden">
+                                            <DialogHeader className="draggable-handle bg-secondary text-secondary-foreground p-2 flex flex-row items-center justify-between cursor-move !space-y-0">
+                                                <DialogTitle className="text-sm font-medium">{appLauncherState.name}</DialogTitle>
+                                                <DialogClose asChild>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6"><X className="h-4 w-4"/></Button>
+                                                </DialogClose>
+                                            </DialogHeader>
+                                            <iframe src={appLauncherState.url} className="w-full h-full border-0" />
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                            </Draggable>
                         )}
 
 
