@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { AddModelsSheet } from '@/components/AddModelsSheet';
 import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
 
@@ -218,7 +218,7 @@ export default function ChatPage() {
             // Add AI response to history
             const finalHistory = [...newHistoryWithUser, { role: 'ai', content: responseText }];
             setChatHistory(finalHistory);
-            handleSaveChat(finalHistory); // Auto-save after response
+            await handleSaveChat(finalHistory); // Auto-save after response
             setStatus('Ready');
     
         } catch (error: any) {
@@ -229,15 +229,17 @@ export default function ChatPage() {
         }
     };
 
-    const handleSaveChat = async (historyToSave: any[]) => {
-        if (!historyToSave || historyToSave.length === 0) return;
+    const handleSaveChat = async (historyToSave?: any[]) => {
+        const history = historyToSave || chatHistory;
+        if (!history || history.length === 0) return;
+
         const fileName = currentChatFile || `Chat_${Date.now()}.json`;
         if (!currentChatFile) {
             setCurrentChatFile(fileName);
         }
         try {
             setStatus('Syncing...');
-            await puter.fs.write(fileName, JSON.stringify(historyToSave, null, 2));
+            await puter.fs.write(fileName, JSON.stringify(history, null, 2));
             await loadHistory();
             setStatus('Ready');
         } catch (error) {
@@ -252,7 +254,7 @@ export default function ChatPage() {
             const chatFiles = files
               .filter((f: {name: string}) => f.name.startsWith('Chat_') && f.name.endsWith('.json'))
               .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); 
-            setHistoryFiles(chatFiles);
+            setHistoryFiles(chatFiles.map(f => ({ name: f.name, path: f.path })));
         } catch (error: any) {
             console.error('Error loading history:', error);
             setHistoryFiles([]);
@@ -412,6 +414,8 @@ export default function ChatPage() {
         { name: 'Google Drive', url: 'https://drive.google.com/' },
         { name: 'Google Sheets', url: 'https://docs.google.com/spreadsheets/' },
         { name: 'Google Docs', url: 'https://docs.google.com/document/' },
+        { name: 'Google Slides', url: 'https://docs.google.com/presentation/' },
+        { name: 'Google Calendar', url: 'https://calendar.google.com/' },
     ];
     
     const launchApp = (url: string, name: string) => {
@@ -602,6 +606,9 @@ export default function ChatPage() {
                             </div>
                         </ScrollArea>
                         <div className="p-2 border-t border-border space-y-2">
+                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()}>
+                                Save Chat
+                            </Button>
                             <Button className="w-full" onClick={startNewChat}>
                                 New Chat
                             </Button>
@@ -802,5 +809,7 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
 
     
