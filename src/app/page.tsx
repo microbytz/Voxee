@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddModelsSheet } from '@/components/AddModelsSheet';
 import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
 
@@ -233,10 +233,12 @@ export default function ChatPage() {
         const history = historyToSave || chatHistory;
         if (!history || history.length === 0) return;
 
-        const fileName = currentChatFile || `Chat_${Date.now()}.json`;
-        if (!currentChatFile) {
+        let fileName = currentChatFile;
+        if (!fileName) {
+            fileName = `Chat_${Date.now()}.json`;
             setCurrentChatFile(fileName);
         }
+
         try {
             setStatus('Syncing...');
             await puter.fs.write(fileName, JSON.stringify(history, null, 2));
@@ -257,6 +259,7 @@ export default function ChatPage() {
             setHistoryFiles(chatFiles.map((f: any) => ({ name: f.name, path: f.path })));
         } catch (error: any) {
             console.error('Error loading history:', error);
+            // This can happen if the user is not logged in.
             setHistoryFiles([]);
         }
     };
@@ -511,19 +514,23 @@ export default function ChatPage() {
         
         const handlePuterReady = async () => {
             try {
+              // Check if user is logged in, this will throw if not.
               await puter.auth.getUser(); 
               loadHistory(); 
             } catch(e) {
+                // User is not logged in, no need to load history.
                 setHistoryFiles([]);
             }
         };
 
+        // This pattern handles both cases: puter.js loaded before or after our component mounts.
         if (window.hasOwnProperty('puter')) {
             handlePuterReady();
         } else {
             window.addEventListener('puter.loaded', handlePuterReady, { once: true });
         }
         
+        // Start with a clean slate if no history is loaded
         if (chatHistory.length === 0) {
              startNewChat();
         }
@@ -812,5 +819,7 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
 
     
