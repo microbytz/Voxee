@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
@@ -20,7 +21,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={cn(inter.className, "bg-background text-foreground")}>
         {children}
-        <Script src="https://js.puter.com/v2/" strategy="beforeInteractive" />
+        <Script src="https://js.puter.com/v2/" strategy="afterInteractive" />
         <Script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" strategy="afterInteractive" />
       </body>
     </html>
