@@ -254,7 +254,7 @@ export default function ChatPage() {
             const chatFiles = files
               .filter((f: {name: string}) => f.name.startsWith('Chat_') && f.name.endsWith('.json'))
               .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); 
-            setHistoryFiles(chatFiles.map(f => ({ name: f.name, path: f.path })));
+            setHistoryFiles(chatFiles.map((f: any) => ({ name: f.name, path: f.path })));
         } catch (error: any) {
             console.error('Error loading history:', error);
             setHistoryFiles([]);
@@ -582,6 +582,8 @@ export default function ChatPage() {
         );
     };
 
+    const isThinking = status === 'Thinking...';
+
     return (
         <div className="flex h-screen bg-background text-foreground">
             <ResizablePanelGroup direction="horizontal" className="w-full">
@@ -591,7 +593,7 @@ export default function ChatPage() {
                             <h2 className="text-lg font-semibold tracking-tight">☁️ Cloud History</h2>
                         </div>
                         <ScrollArea className="flex-1 overflow-y-auto p-2">
-                            <div className="space-y-1">
+                            <div className="space-y-1" style={{ pointerEvents: isThinking ? 'none' : 'auto', opacity: isThinking ? 0.5 : 1 }}>
                                 {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">Log in to see history.</p>}
                                 {historyFiles.map(file => (
                                     <Button
@@ -606,10 +608,10 @@ export default function ChatPage() {
                             </div>
                         </ScrollArea>
                         <div className="p-2 border-t border-border space-y-2">
-                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()}>
+                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking}>
                                 Save Chat
                             </Button>
-                            <Button className="w-full" onClick={startNewChat}>
+                            <Button className="w-full" onClick={startNewChat} disabled={isThinking}>
                                 New Chat
                             </Button>
                         </div>
@@ -640,7 +642,7 @@ export default function ChatPage() {
                                 </DropdownMenu>
                                 <span className="text-primary text-sm">{status}</span>
                             </div>
-                            <Select value={currentAgentId} onValueChange={setCurrentAgentId}>
+                            <Select value={currentAgentId} onValueChange={setCurrentAgentId} disabled={isThinking}>
                                 <SelectTrigger className="w-[280px]">
                                     <SelectValue placeholder="Select an AI Agent" />
                                 </SelectTrigger>
@@ -782,15 +784,16 @@ export default function ChatPage() {
                                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                                     className="pr-32 pl-4"
                                     style={{paddingLeft: `${(capturedImage ? 80 : 0) + attachedFiles.reduce((acc, file) => acc + Math.min(100, file.name.length * 7) + 40, 5)}px`}}
+                                    disabled={isThinking}
                                 />
                                 <div className="absolute inset-y-0 right-2 flex items-center">
-                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files">
+                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isThinking}>
                                         <Paperclip className="h-5 w-5" />
                                     </Button>
-                                    <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera">
+                                    <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera" disabled={isThinking}>
                                         <Camera className="h-5 w-5" />
                                     </Button>
-                                    <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message">
+                                    <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message" disabled={isThinking}>
                                         <Send className="h-5 w-5" />
                                     </Button>
                                 </div>
@@ -809,7 +812,5 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
 
     
