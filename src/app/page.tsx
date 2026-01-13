@@ -20,8 +20,10 @@ import { AddModelsSheet } from '@/components/AddModelsSheet';
 import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
 
 
-// Since puter.js and marked.js are loaded via script tags, we need to declare them to TypeScript
+// Since puter.js is loaded via a script tag, we need to declare it to TypeScript
 declare const puter: any;
+
+// We will load marked.js dynamically, so we'll declare it here.
 declare const marked: any;
 
 interface PuterFile {
@@ -113,6 +115,9 @@ export default function ChatPage() {
     
     // App Launcher State
     const [appLauncherState, setAppLauncherState] = React.useState<{isOpen: boolean; url: string; name: string} | null>(null);
+
+    // Script loading state
+    const [markedLoaded, setMarkedLoaded] = React.useState(false);
 
 
     const chatWindowRef = React.useRef<HTMLDivElement>(null);
@@ -490,6 +495,12 @@ export default function ChatPage() {
     // --- Effects ---
 
     React.useEffect(() => {
+        // Dynamically load marked.js
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+        script.onload = () => setMarkedLoaded(true);
+        document.body.appendChild(script);
+
         const userAgents = getUserAgents();
         if (userAgents.length > 0) {
             setAgents([...DEFAULT_AGENTS, ...userAgents]);
@@ -519,7 +530,8 @@ export default function ChatPage() {
             window.removeEventListener('puter.loaded', handlePuterReady);
             stopCamera();
             window.speechSynthesis?.cancel();
-        }
+            document.body.removeChild(script);
+        };
     }, []);
 
     React.useEffect(() => {
@@ -532,7 +544,7 @@ export default function ChatPage() {
 
     const renderMessageContent = (content: any) => {
         if (typeof content !== 'string') return null;
-        if (typeof marked === 'undefined' || typeof parse === 'undefined') {
+        if (!markedLoaded || typeof parse === 'undefined') {
             return <div className="whitespace-pre-wrap">{content}</div>;
         }
 

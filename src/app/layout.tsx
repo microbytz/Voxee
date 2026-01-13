@@ -22,7 +22,6 @@ export default function RootLayout({
       <body className={cn(inter.className, "bg-background text-foreground")}>
         {children}
         <Script src="https://js.puter.com/v2/" strategy="afterInteractive" />
-        <Script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" strategy="afterInteractive" />
       </body>
     </html>
   );
