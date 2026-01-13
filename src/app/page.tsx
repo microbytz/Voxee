@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import Draggable from 'react-draggable';
 
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
@@ -86,7 +86,6 @@ const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
 
 export default function ChatPage() {
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any, attachments?: any[] }[]>([]);
-    const [historyFiles, setHistoryFiles] = React.useState<{ name: string, path: string }[]>([]);
     const [currentChatFile, setCurrentChatFile] = React.useState<string | null>(null);
     
     // Agent state
@@ -215,7 +214,6 @@ export default function ChatPage() {
                  throw new Error("The AI returned a response in an unexpected format: " + JSON.stringify(aiResponse));
             }
             
-            // Add AI response to history
             const finalHistory = [...newHistoryWithUser, { role: 'ai', content: responseText }];
             setChatHistory(finalHistory);
             await handleSaveChat(finalHistory); // Auto-save after response
@@ -231,18 +229,19 @@ export default function ChatPage() {
 
     const handleSaveChat = async (historyToSave?: any[]) => {
         const history = historyToSave || chatHistory;
-        if (!history || history.length === 0) return;
+        // Don't save if there's only the initial AI message
+        if (!history || history.length <= 1) return;
 
         let fileName = currentChatFile;
         if (!fileName) {
-            fileName = `Chat_${Date.now()}.json`;
-            setCurrentChatFile(fileName);
+            const newFileName = `Chat_${Date.now()}.json`;
+            setCurrentChatFile(newFileName);
+            fileName = newFileName;
         }
 
         try {
             setStatus('Syncing...');
             await puter.fs.write(fileName, JSON.stringify(history, null, 2));
-            await loadHistory();
             setStatus('Ready');
         } catch (error) {
             console.error('Error saving chat:', error);
@@ -250,35 +249,6 @@ export default function ChatPage() {
         }
     };
 
-    const loadHistory = async () => {
-        try {
-            const files = await puter.fs.readdir('/');
-            const chatFiles = files
-              .filter((f: {name: string}) => f.name.startsWith('Chat_') && f.name.endsWith('.json'))
-              .sort((a: {name: string}, b: {name: string}) => b.name.localeCompare(a.name)); 
-            setHistoryFiles(chatFiles.map((f: any) => ({ name: f.name, path: f.path })));
-        } catch (error: any) {
-            console.error('Error loading history:', error);
-            // This can happen if the user is not logged in.
-            setHistoryFiles([]);
-        }
-    };
-
-    const viewChat = async (file: { name: string, path: string }) => {
-        try {
-            const content = await puter.fs.read(file.path);
-            if (typeof content !== 'string') {
-                throw new Error('Chat file is not a valid text file.');
-            }
-            const loadedHistory = JSON.parse(content);
-            setChatHistory(loadedHistory);
-            setCurrentChatFile(file.name);
-        } catch (error: any) {
-            console.error('Error viewing chat:', error);
-            alert('Error loading chat file. It might be corrupted or in an invalid format.');
-        }
-    };
-    
     const startNewChat = () => {
         setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
         if(userInputRef.current) userInputRef.current.value = '';
@@ -514,23 +484,18 @@ export default function ChatPage() {
         
         const handlePuterReady = async () => {
             try {
-              // Check if user is logged in, this will throw if not.
               await puter.auth.getUser(); 
-              loadHistory(); 
             } catch(e) {
-                // User is not logged in, no need to load history.
-                setHistoryFiles([]);
+                // User is not logged in
             }
         };
 
-        // This pattern handles both cases: puter.js loaded before or after our component mounts.
         if (window.hasOwnProperty('puter')) {
             handlePuterReady();
         } else {
             window.addEventListener('puter.loaded', handlePuterReady, { once: true });
         }
         
-        // Start with a clean slate if no history is loaded
         if (chatHistory.length === 0) {
              startNewChat();
         }
@@ -596,24 +561,19 @@ export default function ChatPage() {
             <ResizablePanelGroup direction="horizontal" className="w-full">
                 <ResizablePanel defaultSize={20} minSize={10} maxSize={30}>
                     <aside className="w-full h-full flex-col border-r border-border bg-secondary/20 flex">
-                        <div className="p-4 border-b border-border">
-                            <h2 className="text-lg font-semibold tracking-tight">☁️ Cloud History</h2>
+                        <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center">
+                            <p className="text-sm text-muted-foreground mb-4">
+                                Your chat conversations are saved automatically. You can view them by logging into your account on Puter.com.
+                            </p>
+                            <Button
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => window.open('https://puter.com/files', '_blank')}
+                            >
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                View Saved Chats
+                            </Button>
                         </div>
-                        <ScrollArea className="flex-1 overflow-y-auto p-2">
-                            <div className="space-y-1" style={{ pointerEvents: isThinking ? 'none' : 'auto', opacity: isThinking ? 0.5 : 1 }}>
-                                {historyFiles.length === 0 && <p className="text-center text-sm text-muted-foreground pt-4">Log in to see history.</p>}
-                                {historyFiles.map(file => (
-                                    <Button
-                                        key={file.path}
-                                        variant="ghost"
-                                        className="w-full justify-start text-muted-foreground hover:text-foreground"
-                                        onClick={() => viewChat(file)}
-                                    >
-                                        <span className="truncate">📄 {new Date(parseInt(file.name.replace('Chat_', '').replace('.json',''))).toLocaleString()}</span>
-                                    </Button>
-                                ))}
-                            </div>
-                        </ScrollArea>
                         <div className="p-2 border-t border-border space-y-2">
                              <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking}>
                                 Save Chat
@@ -819,7 +779,3 @@ export default function ChatPage() {
         </div>
     );
 }
-
-    
-
-    
