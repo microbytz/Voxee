@@ -16,7 +16,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { AddModelsSheet } from '@/components/AddModelsSheet';
 import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
 
@@ -91,6 +90,7 @@ export default function ChatPage() {
     // Agent state
     const [agents, setAgents] = React.useState<Agent[]>(DEFAULT_AGENTS);
     const [currentAgentId, setCurrentAgentId] = React.useState<string>(DEFAULT_AGENTS[0].id);
+    const [puterUser, setPuterUser] = React.useState<any>(null);
 
     const [status, setStatus] = React.useState<string>('Ready');
     
@@ -229,6 +229,10 @@ export default function ChatPage() {
 
     const handleSaveChat = async (historyToSave?: any[]) => {
         const history = historyToSave || chatHistory;
+        if (!puterUser) {
+             alert('Please log in to save your chat history.');
+             return;
+        }
         // Don't save if there's only the initial AI message
         if (!history || history.length <= 1) return;
 
@@ -395,6 +399,15 @@ export default function ChatPage() {
         setAppLauncherState({ isOpen: true, url, name });
     };
 
+    const handleLogin = async () => {
+        try {
+            const user = await puter.auth.login();
+            setPuterUser(user);
+        } catch (error) {
+            console.error("Login failed:", error);
+        }
+    };
+
 
     React.useEffect(() => {
         const canvas = canvasRef.current;
@@ -484,9 +497,11 @@ export default function ChatPage() {
         
         const handlePuterReady = async () => {
             try {
-              await puter.auth.getUser(); 
+              const user = await puter.auth.getUser(); 
+              setPuterUser(user);
             } catch(e) {
                 // User is not logged in
+                setPuterUser(null);
             }
         };
 
@@ -520,7 +535,8 @@ export default function ChatPage() {
         if (typeof marked === 'undefined' || typeof parse === 'undefined') {
             return <div className="whitespace-pre-wrap">{content}</div>;
         }
-        const html = marked.parse(content);
+
+        const html = marked.parse(content, { gfm: true, breaks: true });
 
         const options: HTMLReactParserOptions = {
             replace: (domNode) => {
@@ -529,12 +545,19 @@ export default function ChatPage() {
                         (child) => child instanceof Element && child.tagName === 'code'
                     ) as Element | undefined;
 
-                    if (codeNode && codeNode.children.length > 0 && codeNode.children[0].type === 'text') {
+                    if (codeNode && codeNode.children[0] && codeNode.children[0].type === 'text') {
                         const codeText = codeNode.children[0].data;
                         const langClass = codeNode.attribs.class || '';
                         const lang = langClass.startsWith('language-') ? langClass.replace('language-', '') : '';
                         return <CodeBlock code={codeText} lang={lang} />;
                     }
+                }
+                 if (domNode instanceof Element && domNode.attribs && domNode.attribs.href) {
+                    return (
+                        <a href={domNode.attribs.href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            {domToReact(domNode.children, options)}
+                        </a>
+                    );
                 }
             },
         };
@@ -559,23 +582,40 @@ export default function ChatPage() {
     return (
         <div className="flex h-screen bg-background text-foreground">
             <ResizablePanelGroup direction="horizontal" className="w-full">
-                <ResizablePanel defaultSize={20} minSize={10} maxSize={30}>
-                    <aside className="w-full h-full flex-col border-r border-border bg-secondary/20 flex">
-                        <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center">
-                            <p className="text-sm text-muted-foreground mb-4">
-                                Your chat conversations are saved automatically. You can view them by logging into your account on Puter.com.
-                            </p>
-                            <Button
-                                variant="outline"
-                                className="w-full"
-                                onClick={() => window.open('https://puter.com/files', '_blank')}
-                            >
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                View Saved Chats
-                            </Button>
+                <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+                    <aside className="w-full h-full flex flex-col border-r border-border bg-secondary/20">
+                         <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center">
+                            {puterUser ? (
+                                <>
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        Logged in as {puterUser.username}. Your chats are saved to your Puter account.
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full"
+                                        onClick={() => window.open('https://puter.com/files', '_blank')}
+                                    >
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        View Saved Chats
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        Log in to save your chat history and view it on Puter.com.
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full"
+                                        onClick={handleLogin}
+                                    >
+                                        Log In to Puter
+                                    </Button>
+                                </>
+                            )}
                         </div>
                         <div className="p-2 border-t border-border space-y-2">
-                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking}>
+                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking || !puterUser}>
                                 Save Chat
                             </Button>
                             <Button className="w-full" onClick={startNewChat} disabled={isThinking}>
@@ -741,7 +781,7 @@ export default function ChatPage() {
                                             <button onClick={() => removeAttachedFile(file.path)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
 
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
 
                                 <Input
