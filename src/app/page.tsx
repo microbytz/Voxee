@@ -495,7 +495,6 @@ export default function ChatPage() {
     // --- Effects ---
 
     React.useEffect(() => {
-        // Dynamically load marked.js
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
         script.onload = () => setMarkedLoaded(true);
@@ -505,12 +504,12 @@ export default function ChatPage() {
         if (userAgents.length > 0) {
             setAgents([...DEFAULT_AGENTS, ...userAgents]);
         }
-        
+
         const handlePuterReady = async () => {
             try {
-              const user = await puter.auth.getUser(); 
-              setPuterUser(user);
-            } catch(e) {
+                const user = await puter.auth.getUser();
+                setPuterUser(user);
+            } catch (e) {
                 // User is not logged in
                 setPuterUser(null);
             }
@@ -521,16 +520,18 @@ export default function ChatPage() {
         } else {
             window.addEventListener('puter.loaded', handlePuterReady, { once: true });
         }
-        
+
         if (chatHistory.length === 0) {
-             startNewChat();
+            startNewChat();
         }
 
         return () => {
             window.removeEventListener('puter.loaded', handlePuterReady);
             stopCamera();
             window.speechSynthesis?.cancel();
-            document.body.removeChild(script);
+            if (script.parentNode) {
+                document.body.removeChild(script);
+            }
         };
     }, []);
 
@@ -606,6 +607,7 @@ export default function ChatPage() {
                                         variant="outline"
                                         className="w-full"
                                         onClick={() => window.open('https://puter.com/files', '_blank')}
+                                        disabled={isThinking}
                                     >
                                         <ExternalLink className="mr-2 h-4 w-4" />
                                         View Saved Chats
@@ -793,7 +795,7 @@ export default function ChatPage() {
                                             <button onClick={() => removeAttachedFile(file.path)} className="p-0.5 rounded-full hover:bg-background"><X className="h-3 w-3"/></button>
 
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
 
                                 <Input
