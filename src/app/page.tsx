@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import Draggable from 'react-draggable';
 
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink, Minimize } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
@@ -413,6 +413,13 @@ export default function ChatPage() {
         }
     };
 
+    const handleMinimize = () => {
+        if (puter && puter.window && typeof puter.window.minimize === 'function') {
+            puter.window.minimize();
+        } else {
+            console.warn("Puter window API not available.");
+        }
+    };
 
     React.useEffect(() => {
         const canvas = canvasRef.current;
@@ -644,6 +651,9 @@ export default function ChatPage() {
                         <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
                             <div className="flex items-center gap-2">
                                 <span className="font-bold">Infinity AI</span>
+                                <Button onClick={handleMinimize} size="icon" variant="ghost" title="Minimize Window">
+                                    <Minimize className="h-5 w-5" />
+                                </Button>
                                  <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models">
                                     <PlusCircle className="h-5 w-5" />
                                 </Button>
