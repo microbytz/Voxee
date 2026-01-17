@@ -406,7 +406,7 @@ export default function ChatPage() {
 
     const handleLogin = async () => {
         try {
-            const user = await puter.auth.authenticate();
+            const user = await puter.auth();
             setPuterUser(user);
         } catch (error) {
             console.error("Login failed:", error);
