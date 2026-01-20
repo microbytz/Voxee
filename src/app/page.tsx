@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import Draggable from 'react-draggable';
 
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink, Minimize } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink, Minimize, Mic } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
@@ -109,6 +109,11 @@ export default function ChatPage() {
 
     // TTS State
     const [speakingMessageIndex, setSpeakingMessageIndex] = React.useState<number | null>(null);
+
+    // Voice Input State
+    const [isListening, setIsListening] = React.useState(false);
+    const [hasMicPermission, setHasMicPermission] = React.useState<boolean | null>(null);
+    const recognitionRef = React.useRef<any>(null);
 
     // Add Models Sheet state
     const [isAddModelsSheetOpen, setIsAddModelsSheetOpen] = React.useState(false);
@@ -380,6 +385,63 @@ export default function ChatPage() {
         }
     };
 
+    // --- Voice Input Function ---
+    const handleToggleListening = () => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+            setHasMicPermission(false);
+            alert("Your browser does not support Speech Recognition.");
+            return;
+        }
+
+        if (isListening) {
+            recognitionRef.current?.stop();
+            setIsListening(false);
+        } else {
+            const recognition = new SpeechRecognition();
+            recognitionRef.current = recognition;
+
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                setIsListening(true);
+                setHasMicPermission(true);
+            };
+
+            recognition.onend = () => {
+                setIsListening(false);
+            };
+
+            recognition.onerror = (event: any) => {
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    setHasMicPermission(false);
+                }
+                console.error('Speech recognition error:', event.error);
+                setIsListening(false);
+            };
+            
+            let finalTranscript = '';
+            recognition.onresult = (event: any) => {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                if (userInputRef.current) {
+                    userInputRef.current.value = finalTranscript + interimTranscript;
+                }
+            };
+            
+            recognition.start();
+        }
+    };
+
     // --- Agent Management ---
     const handleAgentsUpdated = (updatedAgents: Agent[]) => {
         const newAgentList = [...DEFAULT_AGENTS, ...updatedAgents];
@@ -536,6 +598,7 @@ export default function ChatPage() {
             window.removeEventListener('puter.loaded', handlePuterReady);
             stopCamera();
             window.speechSynthesis?.cancel();
+            recognitionRef.current?.stop();
             if (script.parentNode) {
                 document.body.removeChild(script);
             }
@@ -788,6 +851,16 @@ export default function ChatPage() {
                                     </Alert>
                                 </div>
                             )}
+                            {hasMicPermission === false && (
+                                <div className="max-w-3xl mx-auto mb-4">
+                                    <Alert variant="destructive">
+                                        <AlertTitle>Microphone Access Denied</AlertTitle>
+                                        <AlertDescription>
+                                            Your browser may not support Speech Recognition or permission was denied. Please check your settings.
+                                        </AlertDescription>
+                                    </Alert>
+                                </div>
+                            )}
 
                             <div className="relative max-w-3xl mx-auto w-full">
                                 <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -818,6 +891,9 @@ export default function ChatPage() {
                                     disabled={isThinking}
                                 />
                                 <div className="absolute inset-y-0 right-2 flex items-center">
+                                    <Button onClick={handleToggleListening} size="icon" variant="ghost" title="Use Microphone" disabled={isThinking}>
+                                        <Mic className={`h-5 w-5 ${isListening ? 'text-primary' : ''}`} />
+                                    </Button>
                                     <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isThinking}>
                                         <Paperclip className="h-5 w-5" />
                                     </Button>
