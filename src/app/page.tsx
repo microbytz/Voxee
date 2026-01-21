@@ -252,15 +252,19 @@ export default function ChatPage() {
                 stream: true,
                 onChunk: (chunk: any) => {
                     let textChunk = '';
-                    // The most common format for Puter.ai streaming chunks is a raw string.
+
                     if (typeof chunk === 'string') {
                         textChunk = chunk;
-                    } 
-                    // Fallback for object-based chunks.
-                    else if (chunk && chunk.text) {
-                        textChunk = chunk.text;
-                    } else if (chunk && chunk.message && chunk.message.content) {
+                    } else if (typeof chunk?.message?.content === 'string') {
                         textChunk = chunk.message.content;
+                    } else if (typeof chunk?.text === 'string') {
+                        textChunk = chunk.text;
+                    } else {
+                        // Fallback for other possible structures, like some OpenAI-style streams
+                        const content = chunk?.choices?.[0]?.delta?.content;
+                        if (typeof content === 'string') {
+                            textChunk = content;
+                        }
                     }
                 
                     if (textChunk) {
