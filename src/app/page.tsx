@@ -249,8 +249,20 @@ export default function ChatPage() {
             await puter.ai.chat(messagePayload, { 
                 model: currentAgentId, 
                 max_tokens: 8192,
+                stream: true,
                 onChunk: (chunk: any) => {
-                    const textChunk = chunk.text || (chunk.message && chunk.message.content);
+                    let textChunk = '';
+                    // The most common format for Puter.ai streaming chunks is a raw string.
+                    if (typeof chunk === 'string') {
+                        textChunk = chunk;
+                    } 
+                    // Fallback for object-based chunks.
+                    else if (chunk && chunk.text) {
+                        textChunk = chunk.text;
+                    } else if (chunk && chunk.message && chunk.message.content) {
+                        textChunk = chunk.message.content;
+                    }
+                
                     if (textChunk) {
                         fullResponseText += textChunk;
                         setChatHistory(prev => {
@@ -803,7 +815,7 @@ export default function ChatPage() {
                                         {msg.attachments?.map((att: any, i: number) => (
                                             <AttachmentPreview key={i} attachment={att} />
                                         ))}
-                                        {msg.role === 'ai' && typeof msg.content === 'string' && (
+                                        {msg.role === 'ai' && typeof msg.content === 'string' && msg.content && (
                                             <Button
                                                 size="icon"
                                                 variant="ghost"
