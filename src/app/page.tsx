@@ -232,7 +232,6 @@ export default function ChatPage() {
         messagePayload.push({ role: 'user', content: userMessageContentForApi });
     
         const newHistoryWithUser = [...chatHistory, currentUserMessage];
-        
         const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
         setChatHistory(historyWithPlaceholder);
 
@@ -243,42 +242,41 @@ export default function ChatPage() {
         setStatus('Thinking...');
         
         let fullResponseText = '';
-        let finalHistoryForSaving: any[] = historyWithPlaceholder;
+        let finalHistory: any[] | null = null;
     
         try {
-            await puter.ai.chat(messagePayload, { 
+            const stream = await puter.ai.chat(messagePayload, { 
                 model: currentAgentId, 
                 max_tokens: 8192,
                 stream: true,
-                onChunk: (chunk: any) => {
-                    let textChunk = '';
-
-                    if (typeof chunk === 'string') {
-                        textChunk = chunk;
-                    } else if (typeof chunk?.message?.content === 'string') {
-                        textChunk = chunk.message.content;
-                    } else if (typeof chunk?.text === 'string') {
-                        textChunk = chunk.text;
-                    } else {
-                        // Fallback for other possible structures, like some OpenAI-style streams
-                        const content = chunk?.choices?.[0]?.delta?.content;
-                        if (typeof content === 'string') {
-                            textChunk = content;
-                        }
-                    }
-                
-                    if (textChunk) {
-                        fullResponseText += textChunk;
-                        setChatHistory(prev => {
-                            const newHistory = [...prev.slice(0, -1), { role: 'ai', content: fullResponseText }];
-                            finalHistoryForSaving = newHistory;
-                            return newHistory;
-                        });
-                    }
-                }
             });
+
+            for await (const chunk of stream) {
+                 let textChunk = '';
+
+                if (typeof chunk === 'string') {
+                    textChunk = chunk;
+                } else if (chunk && typeof chunk.text === 'string') {
+                    textChunk = chunk.text;
+                } else if (chunk && chunk.message && typeof chunk.message.content === 'string') {
+                    textChunk = chunk.message.content;
+                } else if (chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
+                    textChunk = chunk.choices[0].delta.content;
+                }
             
-            await handleSaveChat(finalHistoryForSaving);
+                if (textChunk) {
+                    fullResponseText += textChunk;
+                    setChatHistory(prev => {
+                        const newHistory = [...prev.slice(0, -1), { role: 'ai', content: fullResponseText }];
+                        finalHistory = newHistory;
+                        return newHistory;
+                    });
+                }
+            }
+            
+            if (finalHistory) {
+                await handleSaveChat(finalHistory);
+            }
     
         } catch (error: any) {
             console.error("Error from AI:", error);
@@ -292,8 +290,7 @@ export default function ChatPage() {
     const handleSaveChat = async (historyToSave?: any[]) => {
         const history = historyToSave || chatHistory;
         if (!puterUser) {
-             alert('Please log in to save your chat history.');
-             return;
+             return; // Don't show alert, just don't save.
         }
         if (!history || history.length <= 1) return;
 
