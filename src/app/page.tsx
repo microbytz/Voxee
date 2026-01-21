@@ -148,14 +148,48 @@ export default function ChatPage() {
     const addMessage = (role: string, content: any, attachments?: any[]) => {
         setChatHistory(prev => [...prev, { role, content, attachments }]);
     };
+
+    const handleImageGeneration = async (prompt: string) => {
+        const imagePrompt = prompt.replace('/imagine ', '').trim();
+        if (!imagePrompt) {
+            addMessage('ai', 'Please provide a prompt for the image. For example: `/imagine a robot painting a mural`');
+            if (userInputRef.current) userInputRef.current.value = '';
+            return;
+        }
+    
+        addMessage('user', prompt);
+        if (userInputRef.current) userInputRef.current.value = '';
+        setStatus('Generating image...');
+    
+        try {
+            const imageUrl = await puter.ai.generateImage({ prompt: imagePrompt });
+            addMessage('ai', { type: 'image', url: imageUrl, alt: imagePrompt });
+            
+            setChatHistory(prev => {
+                handleSaveChat(prev);
+                return prev;
+            });
+    
+        } catch (error: any) {
+            console.error("Error generating image:", error);
+            const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
+            addMessage('ai', 'Sorry, I encountered an error generating the image: ' + errorMessage);
+        } finally {
+            setStatus('Ready');
+        }
+    };
     
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
+
+        if (userText.startsWith('/imagine ')) {
+            await handleImageGeneration(userText);
+            return;
+        }
     
         const selectedAgent = agents.find(agent => agent.id === currentAgentId);
     
-        // Create a deep copy for the API payload to avoid mutations
         const historyForApi = JSON.parse(JSON.stringify(chatHistory));
         let messagePayload: any[] = [];
     
@@ -163,7 +197,6 @@ export default function ChatPage() {
             messagePayload.push({ role: 'system', content: selectedAgent.systemPrompt });
         }
     
-        // Add previous messages from state
         historyForApi.forEach((msg: any) => {
             const role = msg.role === 'ai' ? 'assistant' : msg.role;
             let content = msg.content;
@@ -199,40 +232,43 @@ export default function ChatPage() {
         messagePayload.push({ role: 'user', content: userMessageContentForApi });
     
         const newHistoryWithUser = [...chatHistory, currentUserMessage];
-        setChatHistory(newHistoryWithUser);
+        
+        const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
+        setChatHistory(historyWithPlaceholder);
 
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
     
         setStatus('Thinking...');
+        
+        let fullResponseText = '';
+        let finalHistoryForSaving: any[] = historyWithPlaceholder;
     
         try {
-            const aiResponse = await puter.ai.chat(messagePayload, { model: currentAgentId, max_tokens: 8192 });
+            await puter.ai.chat(messagePayload, { 
+                model: currentAgentId, 
+                max_tokens: 8192,
+                onChunk: (chunk: any) => {
+                    const textChunk = chunk.text || (chunk.message && chunk.message.content);
+                    if (textChunk) {
+                        fullResponseText += textChunk;
+                        setChatHistory(prev => {
+                            const newHistory = [...prev.slice(0, -1), { role: 'ai', content: fullResponseText }];
+                            finalHistoryForSaving = newHistory;
+                            return newHistory;
+                        });
+                    }
+                }
+            });
             
-            let responseText;
-            
-            if (aiResponse && aiResponse.message && typeof aiResponse.message.content === 'string') {
-                responseText = aiResponse.message.content;
-            } else if (aiResponse && aiResponse.message && Array.isArray(aiResponse.message.content) && aiResponse.message.content[0]?.type === 'text') {
-                responseText = aiResponse.message.content[0].text;
-            } else if (aiResponse && Array.isArray(aiResponse) && aiResponse.length > 0 && typeof aiResponse[0].text === 'string') {
-                responseText = aiResponse[0].text;
-            } else if (typeof aiResponse === 'string') {
-                responseText = aiResponse;
-            } else {
-                 throw new Error("The AI returned a response in an unexpected format: " + JSON.stringify(aiResponse));
-            }
-            
-            const finalHistory = [...newHistoryWithUser, { role: 'ai', content: responseText }];
-            setChatHistory(finalHistory);
-            await handleSaveChat(finalHistory); // Auto-save after response
-            setStatus('Ready');
+            await handleSaveChat(finalHistoryForSaving);
     
         } catch (error: any) {
             console.error("Error from AI:", error);
             const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
-            setChatHistory(prev => [...prev, { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }]);
+            setChatHistory(prev => [...prev.slice(0, -1), { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }]);
+        } finally {
             setStatus('Ready');
         }
     };
@@ -243,7 +279,6 @@ export default function ChatPage() {
              alert('Please log in to save your chat history.');
              return;
         }
-        // Don't save if there's only the initial AI message
         if (!history || history.length <= 1) return;
 
         let fileName = currentChatFile;
@@ -268,7 +303,7 @@ export default function ChatPage() {
         if(userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
-        setCurrentChatFile(null); // This is now a new chat
+        setCurrentChatFile(null);
     };
 
     // --- Attachment Functions ---
@@ -479,7 +514,7 @@ export default function ChatPage() {
         if (puter && puter.window && typeof puter.window.minimize === 'function') {
             puter.window.minimize();
         } else {
-            console.warn("Puter window API not available.");
+            console.warn("Puter window API not available or not running in Puter environment.");
         }
     };
 
@@ -614,6 +649,10 @@ export default function ChatPage() {
     // --- Render ---
 
     const renderMessageContent = (content: any) => {
+        if (typeof content === 'object' && content !== null && content.type === 'image' && content.url) {
+            return <img src={content.url} alt={content.alt || 'Generated image'} className="mt-2 rounded-lg max-w-md" />;
+        }
+
         if (typeof content !== 'string') return null;
         if (!markedLoaded || typeof parse === 'undefined') {
             return <div className="whitespace-pre-wrap">{content}</div>;
@@ -660,7 +699,7 @@ export default function ChatPage() {
         );
     };
 
-    const isThinking = status === 'Thinking...';
+    const isThinking = status === 'Thinking...' || status === 'Generating image...';
 
     return (
         <div className="flex h-screen bg-background text-foreground">
@@ -883,7 +922,7 @@ export default function ChatPage() {
 
                                 <Input
                                     id="user-input"
-                                    placeholder="Ask your agent anything..."
+                                    placeholder="Ask anything, or try '/imagine a cat in a spacesuit'..."
                                     ref={userInputRef}
                                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                                     className="pr-32 pl-4"
