@@ -162,7 +162,7 @@ export default function ChatPage() {
         setStatus('Generating image...');
     
         try {
-            const imageUrl = await puter.ai.generateImage({ prompt: imagePrompt });
+            const imageUrl = await puter.ai.imagine({ prompt: imagePrompt });
             addMessage('ai', { type: 'image', url: imageUrl, alt: imagePrompt });
             
             setChatHistory(prev => {
