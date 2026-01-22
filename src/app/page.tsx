@@ -11,13 +11,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import Draggable from 'react-draggable';
 
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink, Minimize, Mic } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink, Minimize, Mic, Trash, RefreshCw } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { AddModelsSheet } from '@/components/AddModelsSheet';
 import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 
 // Since puter.js is loaded via a script tag, we need to declare it to TypeScript
@@ -93,6 +95,7 @@ export default function ChatPage() {
     const [agents, setAgents] = React.useState<Agent[]>(DEFAULT_AGENTS);
     const [currentAgentId, setCurrentAgentId] = React.useState<string>(DEFAULT_AGENTS[0].id);
     const [puterUser, setPuterUser] = React.useState<any>(null);
+    const [savedChats, setSavedChats] = React.useState<string[]>([]);
 
     const [status, setStatus] = React.useState<string>('Ready');
     
@@ -148,45 +151,62 @@ export default function ChatPage() {
     const addMessage = (role: string, content: any, attachments?: any[]) => {
         setChatHistory(prev => [...prev, { role, content, attachments }]);
     };
+    
+    const startNewChat = () => {
+        setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
+        if(userInputRef.current) userInputRef.current.value = '';
+        setCapturedImage(null);
+        setAttachedFiles([]);
+        setCurrentChatFile(null);
+    };
 
-    const handleImageGeneration = async (prompt: string) => {
-        const imagePrompt = prompt.replace('/imagine ', '').trim();
-        if (!imagePrompt) {
-            addMessage('ai', 'Please provide a prompt for the image. For example: `/imagine a robot painting a mural`');
-            if (userInputRef.current) userInputRef.current.value = '';
-            return;
-        }
-    
-        addMessage('user', prompt);
-        if (userInputRef.current) userInputRef.current.value = '';
-        setStatus('Generating image...');
-    
+    const loadSavedChats = React.useCallback(async () => {
+        if (!puterUser) return;
         try {
-            const imageUrl = await puter.imagine(imagePrompt);
-            addMessage('ai', { type: 'image', url: imageUrl, alt: imagePrompt });
-            
-            setChatHistory(prev => {
-                handleSaveChat(prev);
-                return prev;
-            });
-    
-        } catch (error: any) {
-            console.error("Error generating image:", error);
-            const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
-            addMessage('ai', 'Sorry, I encountered an error generating the image: ' + errorMessage);
-        } finally {
-            setStatus('Ready');
+            const files = await puter.fs.readdir('/');
+            const chatFiles = files
+                .filter((f: any) => f.name.startsWith('Chat_') && f.name.endsWith('.json'))
+                .map((f: any) => f.name)
+                .sort((a: string, b: string) => b.localeCompare(a));
+            setSavedChats(chatFiles);
+        } catch (error) {
+            console.error("Could not load saved chats:", error);
+        }
+    }, [puterUser]);
+
+    const handleLoadChat = async (fileName: string) => {
+        if (isThinking) return;
+        try {
+            const content = await puter.fs.read(fileName);
+            if (typeof content === 'string') {
+                const history = JSON.parse(content);
+                setChatHistory(history);
+                setCurrentChatFile(fileName);
+            }
+        } catch (error) {
+            console.error('Error loading chat:', error);
+            alert('Could not load chat.');
         }
     };
-    
+
+    const handleDeleteChat = async (fileName: string) => {
+        if (window.confirm(`Are you sure you want to delete this chat?`)) {
+            try {
+                await puter.fs.delete(fileName);
+                if (currentChatFile === fileName) {
+                    startNewChat();
+                }
+                await loadSavedChats(); // Refresh the list
+            } catch (error) {
+                console.error('Error deleting chat:', error);
+                alert('Could not delete chat file.');
+            }
+        }
+    };
+
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
-
-        if (userText.startsWith('/imagine ')) {
-            await handleImageGeneration(userText);
-            return;
-        }
     
         const selectedAgent = agents.find(agent => agent.id === currentAgentId);
     
@@ -294,7 +314,9 @@ export default function ChatPage() {
         }
         if (!history || history.length <= 1) return;
 
+        const isNewChat = !currentChatFile;
         let fileName = currentChatFile;
+
         if (!fileName) {
             const newFileName = `Chat_${Date.now()}.json`;
             setCurrentChatFile(newFileName);
@@ -304,6 +326,9 @@ export default function ChatPage() {
         try {
             setStatus('Syncing...');
             await puter.fs.write(fileName, JSON.stringify(history, null, 2));
+            if (isNewChat) {
+                await loadSavedChats();
+            }
             setStatus('Ready');
         } catch (error) {
             console.error('Error saving chat:', error);
@@ -311,13 +336,6 @@ export default function ChatPage() {
         }
     };
 
-    const startNewChat = () => {
-        setChatHistory([{ role: 'ai', content: 'Hello! How can I help you today?' }]);
-        if(userInputRef.current) userInputRef.current.value = '';
-        setCapturedImage(null);
-        setAttachedFiles([]);
-        setCurrentChatFile(null);
-    };
 
     // --- Attachment Functions ---
     const handleFilePicker = async () => {
@@ -530,6 +548,19 @@ export default function ChatPage() {
             console.warn("Puter window API not available or not running in Puter environment.");
         }
     };
+    
+    const formatChatName = (fileName: string) => {
+        try {
+            const timestamp = fileName.match(/(\\d+)/)?.[0];
+            if (!timestamp) return fileName.replace('Chat_', '').replace('.json', '');
+            const date = new Date(parseInt(timestamp));
+            // Format to something like: Jul 27, 3:45 PM
+            return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        } catch {
+            return fileName.replace('Chat_', '').replace('.json', '');
+        }
+    };
+
 
     React.useEffect(() => {
         const canvas = canvasRef.current;
@@ -651,7 +682,16 @@ export default function ChatPage() {
                 document.body.removeChild(script);
             }
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    React.useEffect(() => {
+        if (puterUser) {
+            loadSavedChats();
+        } else {
+            setSavedChats([]); // Clear chats if user logs out
+        }
+    }, [puterUser, loadSavedChats]);
 
     React.useEffect(() => {
         if (chatWindowRef.current) {
@@ -719,40 +759,64 @@ export default function ChatPage() {
             <ResizablePanelGroup direction="horizontal" className="w-full">
                 <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
                     <aside className="w-full h-full flex flex-col border-r border-border bg-secondary/20">
-                         <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center">
-                            {puterUser ? (
-                                <>
-                                    <p className="text-sm text-muted-foreground mb-4">
-                                        Logged in as {puterUser.username}. Your chats are saved to your Puter account.
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        className="w-full"
-                                        onClick={() => window.open('https://puter.com/files', '_blank')}
-                                        disabled={isThinking}
-                                    >
-                                        <ExternalLink className="mr-2 h-4 w-4" />
-                                        View Saved Chats
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <p className="text-sm text-muted-foreground mb-4">
-                                        Log in to save your chat history and view it on Puter.com.
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        className="w-full"
-                                        onClick={handleLogin}
-                                    >
-                                        Log In to Puter
-                                    </Button>
-                                </>
-                            )}
+                         <div className="flex-1 p-2 overflow-y-auto">
+                            <div className="flex items-center justify-between mb-2">
+                                <h2 className="text-lg font-semibold px-2">Saved Chats</h2>
+                                <Button variant="ghost" size="icon" onClick={loadSavedChats} title="Refresh Chats">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                            </div>
+                             <ScrollArea className="h-full">
+                                {puterUser ? (
+                                    <div className="space-y-1">
+                                        {savedChats.map(fileName => (
+                                            <div key={fileName} className={cn(
+                                                "group flex items-center justify-between p-2 rounded-md cursor-pointer",
+                                                currentChatFile === fileName ? "bg-primary/20" : "hover:bg-secondary"
+                                            )}>
+                                                <button
+                                                    onClick={() => handleLoadChat(fileName)}
+                                                    className="flex-1 text-left truncate text-sm"
+                                                    title={fileName}
+                                                >
+                                                    {formatChatName(fileName)}
+                                                </button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteChat(fileName);
+                                                    }}
+                                                >
+                                                    <Trash className="h-4 w-4 text-destructive/70 hover:text-destructive" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                        {savedChats.length === 0 && (
+                                            <p className="text-sm text-muted-foreground text-center p-4">No saved chats found.</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="p-4 text-center">
+                                        <p className="text-sm text-muted-foreground mb-4">
+                                            Log in to save and view your chat history.
+                                        </p>
+                                        <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={handleLogin}
+                                        >
+                                            Log In to Puter
+                                        </Button>
+                                    </div>
+                                )}
+                            </ScrollArea>
                         </div>
                         <div className="p-2 border-t border-border space-y-2">
                              <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking || !puterUser}>
-                                Save Chat
+                                Save Current Chat
                             </Button>
                             <Button className="w-full" onClick={startNewChat} disabled={isThinking}>
                                 New Chat
@@ -935,7 +999,7 @@ export default function ChatPage() {
 
                                 <Input
                                     id="user-input"
-                                    placeholder="Ask anything, or try '/imagine a cat in a spacesuit'..."
+                                    placeholder="Ask anything..."
                                     ref={userInputRef}
                                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                                     className="pr-32 pl-4"
