@@ -852,7 +852,7 @@ export default function ChatPage() {
                                             <AppWindow className="h-5 w-5" />
                                         </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent>
+                                    <DropdownMenuContent className="max-h-96 overflow-y-auto">
                                         {apps.map(app => (
                                             <DropdownMenuItem key={app.name} onClick={() => launchApp(app.url, app.name)}>
                                                 {app.name}
