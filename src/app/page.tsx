@@ -11,12 +11,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import Draggable from 'react-draggable';
 
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, ExternalLink, Minimize, Mic, Trash, RefreshCw } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, Minimize, Mic, Trash, RefreshCw, KeyRound } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { AddModelsSheet } from '@/components/AddModelsSheet';
+import { AddApiKeySheet } from '@/components/AddApiKeySheet';
 import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -86,6 +87,62 @@ const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
     );
 };
 
+const streamOpenAIChat = async (messages: any[], agent: Agent, onChunk: (text: string) => void) => {
+    if (!agent.apiKey) {
+        throw new Error('API Key not found for custom agent.');
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${agent.apiKey}`
+        },
+        body: JSON.stringify({
+            model: agent.model,
+            messages: messages,
+            stream: true,
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error.message || 'Failed to fetch from OpenAI API');
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    if (!reader) {
+        throw new Error('Could not read response body');
+    }
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim().startsWith('data: '));
+
+        for (const line of lines) {
+            const data = line.replace(/^data: /, '');
+            if (data === '[DONE]') {
+                return;
+            }
+            try {
+                const parsed = JSON.parse(data);
+                const textChunk = parsed.choices[0]?.delta?.content || '';
+                if (textChunk) {
+                    onChunk(textChunk);
+                }
+            } catch (e) {
+                // Ignore parsing errors on incomplete JSON chunks
+            }
+        }
+    }
+};
+
 
 export default function ChatPage() {
     const [chatHistory, setChatHistory] = React.useState<{ role: string, content: any, attachments?: any[] }[]>([]);
@@ -120,6 +177,7 @@ export default function ChatPage() {
 
     // Add Models Sheet state
     const [isAddModelsSheetOpen, setIsAddModelsSheetOpen] = React.useState(false);
+    const [isAddApiKeySheetOpen, setIsAddApiKeySheetOpen] = React.useState(false);
     
     // App Launcher State
     const [appLauncherState, setAppLauncherState] = React.useState<{isOpen: boolean; url: string; name: string} | null>(null);
@@ -137,13 +195,20 @@ export default function ChatPage() {
     
     const agentProviders = React.useMemo(() => {
         const providers = agents.reduce((acc, agent) => {
-            if (!acc[agent.provider]) {
-                acc[agent.provider] = [];
+            const providerName = agent.isCustom ? agent.provider : 'Puter Models';
+            if (!acc[providerName]) {
+                acc[providerName] = [];
             }
-            acc[agent.provider].push(agent);
+            acc[providerName].push(agent);
             return acc;
         }, {} as Record<string, Agent[]>);
-        return Object.entries(providers);
+
+        // Sort providers: Puter, then alphabetical for custom
+        return Object.entries(providers).sort(([a], [b]) => {
+            if (a === 'Puter Models') return -1;
+            if (b === 'Puter Models') return 1;
+            return a.localeCompare(b);
+        });
     }, [agents]);
 
 
@@ -209,89 +274,109 @@ export default function ChatPage() {
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
     
         const selectedAgent = agents.find(agent => agent.id === currentAgentId);
+        if (!selectedAgent) {
+            addMessage('ai', 'Error: Could not find the selected agent configuration.');
+            return;
+        }
     
+        // 1. Prepare history and user message for UI
+        const currentUserMessage: { role: string; content: any; attachments: any[] } = {
+            role: 'user',
+            content: userText || 'File(s) attached',
+            attachments: []
+        };
+        // Add attachments to UI message
+        if (capturedImage) {
+            currentUserMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
+        }
+        for (const file of attachedFiles) {
+            const content = await file.read(); // This could be slow
+            currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
+        }
+    
+        // 2. Update UI immediately with user message and AI placeholder
+        const newHistoryWithUser = [...chatHistory, currentUserMessage];
+        const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
+        setChatHistory(historyWithPlaceholder);
+        if (userInputRef.current) userInputRef.current.value = '';
+        setCapturedImage(null);
+        setAttachedFiles([]);
+        setStatus('Thinking...');
+    
+        // 3. Prepare payload for the AI API
         const historyForApi = JSON.parse(JSON.stringify(chatHistory));
         let messagePayload: any[] = [];
     
         if (selectedAgent && selectedAgent.systemPrompt) {
             messagePayload.push({ role: 'system', content: selectedAgent.systemPrompt });
         }
-    
         historyForApi.forEach((msg: any) => {
-            const role = msg.role === 'ai' ? 'assistant' : msg.role;
-            let content = msg.content;
-            
-            if (typeof content !== 'string') {
-                content = "[attachment in history]";
-            }
-            messagePayload.push({ role, content });
+            messagePayload.push({ role: msg.role === 'ai' ? 'assistant' : 'user', content: msg.content });
         });
     
-        const currentUserMessage: { role: string; content: any; attachments: any[] } = {
-            role: 'user',
-            content: userText || 'File(s) attached',
-            attachments: []
-        };
-    
         let userMessageContentForApi: any[] = [];
-        if (userText) {
-            userMessageContentForApi.push({ type: 'text', text: userText });
-        }
-    
-        if (capturedImage) {
-            userMessageContentForApi.push({ type: 'image', source: { data: capturedImage } });
-            currentUserMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
-        }
-    
+        if (userText) userMessageContentForApi.push({ type: 'text', text: userText });
+        if (capturedImage) userMessageContentForApi.push({ type: 'image', source: { data: capturedImage } });
         for (const file of attachedFiles) {
             const content = await file.read();
             userMessageContentForApi.push({ type: 'text', text: `Attached file: ${file.name}\n\n${content}` });
-            currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
         }
-    
         messagePayload.push({ role: 'user', content: userMessageContentForApi });
     
-        const newHistoryWithUser = [...chatHistory, currentUserMessage];
-        const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
-        setChatHistory(historyWithPlaceholder);
-
-        if (userInputRef.current) userInputRef.current.value = '';
-        setCapturedImage(null);
-        setAttachedFiles([]);
-    
-        setStatus('Thinking...');
-        
-        let fullResponseText = '';
+        // 4. Process the request
         let finalHistory: any[] | null = null;
-    
+        let fullResponseText = '';
+        
         try {
-            const stream = await puter.ai.chat(messagePayload, { 
-                model: currentAgentId, 
-                max_tokens: 8192,
-                stream: true,
-            });
+            const onChunk = (textChunk: string) => {
+                fullResponseText += textChunk;
+                setChatHistory(prev => {
+                    const newHistory = [...prev.slice(0, -1), { role: 'ai', content: fullResponseText }];
+                    finalHistory = newHistory;
+                    return newHistory;
+                });
+            };
 
-            for await (const chunk of stream) {
-                 let textChunk = '';
-
-                if (typeof chunk === 'string') {
-                    textChunk = chunk;
-                } else if (chunk && typeof chunk.text === 'string') {
-                    textChunk = chunk.text;
-                } else if (chunk && chunk.message && typeof chunk.message.content === 'string') {
-                    textChunk = chunk.message.content;
-                } else if (chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
-                    textChunk = chunk.choices[0].delta.content;
+            if (selectedAgent.provider === 'Puter') {
+                const stream = await puter.ai.chat(messagePayload, { 
+                    model: selectedAgent.model, 
+                    max_tokens: 8192,
+                    stream: true,
+                });
+    
+                for await (const chunk of stream) {
+                     let textChunk = '';
+                    if (typeof chunk === 'string') {
+                        textChunk = chunk;
+                    } else if (chunk && typeof chunk.text === 'string') {
+                        textChunk = chunk.text;
+                    } else if (chunk && chunk.message && typeof chunk.message.content === 'string') {
+                        textChunk = chunk.message.content;
+                    } else if (chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
+                        textChunk = chunk.choices[0].delta.content;
+                    }
+                    if (textChunk) onChunk(textChunk);
                 }
-            
-                if (textChunk) {
-                    fullResponseText += textChunk;
-                    setChatHistory(prev => {
-                        const newHistory = [...prev.slice(0, -1), { role: 'ai', content: fullResponseText }];
-                        finalHistory = newHistory;
-                        return newHistory;
+            } else if (selectedAgent.provider === 'OpenAI' && selectedAgent.isCustom) {
+                // OpenAI needs a simpler message format for text-only
+                const openAiMessages = messagePayload
+                    .map((msg: any) => {
+                        let content = '';
+                        if (typeof msg.content === 'string') {
+                            content = msg.content;
+                        } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+                            // For now, just find the first text part for simplicity
+                            content = msg.content.find(p => p.type === 'text')?.text || '[unsupported content]';
+                        } else if (msg.role !== 'system') {
+                            content = msg.content || '';
+                        }
+                        return { role: msg.role, content };
                     });
-                }
+
+                await streamOpenAIChat(openAiMessages, selectedAgent, onChunk);
+
+            } else {
+                throw new Error(`Provider "${selectedAgent.provider}" is not configured for streaming.`);
             }
             
             if (finalHistory) {
@@ -300,7 +385,7 @@ export default function ChatPage() {
     
         } catch (error: any) {
             console.error("Error from AI:", error);
-            const errorMessage = "```json\n" + JSON.stringify(error, null, 2) + "\n```";
+            const errorMessage = "```json\n" + JSON.stringify({ message: error.message }, null, 2) + "\n```";
             setChatHistory(prev => [...prev.slice(0, -1), { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }]);
         } finally {
             setStatus('Ready');
@@ -510,9 +595,9 @@ export default function ChatPage() {
 
     // --- Agent Management ---
     const handleAgentsUpdated = (updatedAgents: Agent[]) => {
+        saveUserAgents(updatedAgents);
         const newAgentList = [...DEFAULT_AGENTS, ...updatedAgents];
         setAgents(newAgentList);
-        saveUserAgents(updatedAgents);
         if (!newAgentList.find(a => a.id === currentAgentId)) {
             setCurrentAgentId(newAgentList[0].id);
         }
@@ -659,10 +744,8 @@ export default function ChatPage() {
         document.body.appendChild(script);
 
         const userAgents = getUserAgents();
-        if (userAgents.length > 0) {
-            setAgents([...DEFAULT_AGENTS, ...userAgents]);
-        }
-
+        setAgents([...DEFAULT_AGENTS, ...userAgents]);
+        
         const handlePuterReady = async () => {
             try {
                 const user = await puter.auth.getUser();
@@ -845,6 +928,9 @@ export default function ChatPage() {
                                 </Button>
                                  <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models">
                                     <PlusCircle className="h-5 w-5" />
+                                </Button>
+                                <Button onClick={() => setIsAddApiKeySheetOpen(true)} size="icon" variant="ghost" title="Add Custom Agent via API Key">
+                                    <KeyRound className="h-5 w-5" />
                                 </Button>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -1040,6 +1126,11 @@ export default function ChatPage() {
                 isOpen={isAddModelsSheetOpen}
                 onOpenChange={setIsAddModelsSheetOpen}
                 currentAgents={agents}
+                onAgentsUpdated={handleAgentsUpdated}
+            />
+             <AddApiKeySheet
+                isOpen={isAddApiKeySheetOpen}
+                onOpenChange={setIsAddApiKeySheetOpen}
                 onAgentsUpdated={handleAgentsUpdated}
             />
         </div>

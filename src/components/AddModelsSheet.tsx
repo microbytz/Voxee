@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Agent, DEFAULT_AGENTS } from '@/lib/agents';
 import { Loader2, Pen } from 'lucide-react';
+import { getUserAgents } from '@/lib/user-agents';
 
 declare const puter: any;
 
@@ -39,7 +40,7 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
     const [agentToEdit, setAgentToEdit] = useState<Agent | null>(null);
     const [editedName, setEditedName] = useState('');
     const [editedPrompt, setEditedPrompt] = useState('');
-    const [customizations, setCustomizations] = useState<Record<string, Partial<Agent>>>({});
+    const [customizations, setCustomizations] = useState<Record<string, { name?: string, systemPrompt?: string }>>({});
 
 
     useEffect(() => {
@@ -51,15 +52,17 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
                     const models = await puter.ai.listModels();
                     setAllModels(models);
                     
-                    const initialSelected = new Set(currentAgents.map(a => a.id));
+                    const userAgents = getUserAgents();
+                    const initialSelected = new Set(userAgents.filter(a => a.provider === 'Puter').map(a => a.model));
                     setSelectedModelIds(initialSelected);
 
-                    // Pre-fill customizations from current agents that are not default
-                    const initialCustoms: Record<string, Partial<Agent>> = {};
-                    currentAgents.forEach(agent => {
-                        const isDefault = DEFAULT_AGENTS.some(d => d.id === agent.id && d.name === agent.name && d.systemPrompt === agent.systemPrompt);
-                        if (!isDefault) {
-                            initialCustoms[agent.id] = { name: agent.name, systemPrompt: agent.systemPrompt };
+                    const initialCustoms: Record<string, { name?: string, systemPrompt?: string }> = {};
+                    userAgents.forEach(agent => {
+                         if (agent.provider === 'Puter') {
+                            const defaultAgent = DEFAULT_AGENTS.find(d => d.model === agent.model);
+                             if (!defaultAgent || agent.name !== defaultAgent.name || agent.systemPrompt !== defaultAgent.systemPrompt) {
+                                initialCustoms[agent.model] = { name: agent.name, systemPrompt: agent.systemPrompt };
+                            }
                         }
                     });
                     setCustomizations(initialCustoms);
@@ -73,7 +76,7 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
             };
             fetchModelsAndSetup();
         }
-    }, [isOpen, currentAgents]);
+    }, [isOpen]);
 
     const handleCheckboxChange = (modelId: string, checked: boolean) => {
         setSelectedModelIds(prev => {
@@ -89,14 +92,14 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
 
     const handleEditClick = (model: PuterModel) => {
         const customData = customizations[model.id];
-        const currentAgent = currentAgents.find(a => a.id === model.id);
-        const defaultAgent = DEFAULT_AGENTS.find(a => a.id === model.id);
+        const defaultAgent = DEFAULT_AGENTS.find(a => a.model === model.id);
 
         const agent: Agent = {
-            id: model.id,
-            name: customData?.name || currentAgent?.name || defaultAgent?.name || model.name || model.id,
-            provider: currentAgent?.provider || defaultAgent?.provider || model.provider || model.owner || 'Custom',
-            systemPrompt: customData?.systemPrompt || currentAgent?.systemPrompt || defaultAgent?.systemPrompt || `You are ${model.name || model.id}.`,
+            id: `puter-${model.id.replace(/[\/:]/g, '-')}`,
+            model: model.id,
+            name: customData?.name || defaultAgent?.name || model.name || model.id,
+            provider: 'Puter',
+            systemPrompt: customData?.systemPrompt || defaultAgent?.systemPrompt || `You are ${model.name || model.id}.`,
         };
         
         setAgentToEdit(agent);
@@ -108,43 +111,39 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
         if (!agentToEdit) return;
         setCustomizations(prev => ({
             ...prev,
-            [agentToEdit.id]: { name: editedName, systemPrompt: editedPrompt }
+            [agentToEdit.model]: { name: editedName, systemPrompt: editedPrompt }
         }));
         setAgentToEdit(null);
     };
 
     const handleSave = () => {
-        // 1. Get all selected models and create Agent objects for them, applying customizations.
-        const allSelectedAgents: Agent[] = allModels
+        // 1. Create Agent objects for all selected Puter models, applying customizations.
+        const selectedPuterAgents: Agent[] = allModels
             .filter(model => selectedModelIds.has(model.id))
             .map(model => {
                 const customData = customizations[model.id];
-                const defaultAgent = DEFAULT_AGENTS.find(a => a.id === model.id);
+                const defaultAgent = DEFAULT_AGENTS.find(a => a.model === model.id);
                 const baseName = model.name || model.id;
 
                 return {
-                    id: model.id,
+                    id: `puter-${model.id.replace(/[\/:]/g, '-')}`,
                     name: customData?.name || defaultAgent?.name || baseName,
-                    provider: defaultAgent?.provider || model.provider || model.owner || 'Custom',
+                    provider: 'Puter',
+                    model: model.id,
                     systemPrompt: customData?.systemPrompt || defaultAgent?.systemPrompt || `You are ${baseName}.`,
+                    isCustom: true,
                 };
             });
 
-        // 2. Figure out which of these need to be saved to localStorage.
-        // These are the ones that are NOT default agents, or ARE default agents but are customized.
-        const agentsForStorage = allSelectedAgents.filter(agent => {
-            const defaultAgent = DEFAULT_AGENTS.find(d => d.id === agent.id);
-            if (!defaultAgent) {
-                return true; // It's a custom model from Puter, not one of the app's defaults
-            }
-            // It is a default agent. Check if it's different.
-            if (agent.name !== defaultAgent.name || agent.systemPrompt !== defaultAgent.systemPrompt) {
-                return true; // It's a customized default agent.
-            }
-            return false;
-        });
+        // 2. Get existing user agents and filter out the ones managed by this sheet (Puter agents).
+        const existingUserAgents = getUserAgents();
+        const nonPuterUserAgents = existingUserAgents.filter(a => a.provider !== 'Puter');
 
-        onAgentsUpdated(agentsForStorage);
+        // 3. Combine the newly selected Puter agents with the other types of custom agents.
+        const finalUserAgents = [...nonPuterUserAgents, ...selectedPuterAgents];
+
+        // 4. Update the state and local storage.
+        onAgentsUpdated(finalUserAgents);
         onOpenChange(false);
     };
 
@@ -165,7 +164,7 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
                     <SheetHeader>
                         <SheetTitle>Add & Remove AI Models</SheetTitle>
                         <SheetDescription>
-                            Select models to add them to your agent list. Click the edit icon to customize an agent's name and prompt.
+                            Select models from Puter to add them to your agent list. Click the edit icon to customize an agent's name and prompt.
                         </SheetDescription>
                     </SheetHeader>
                     <div className="flex-1 overflow-hidden">
@@ -185,7 +184,13 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
                                             <div className="space-y-1">
                                                 {models.map(model => {
                                                     const customData = customizations[model.id];
-                                                    const agentName = customData?.name || model.name || model.id;
+                                                    const defaultAgent = DEFAULT_AGENTS.find(a => a.model === model.id);
+                                                    const agentName = customData?.name || defaultAgent?.name || model.name || model.id;
+                                                    
+                                                    const isChecked = selectedModelIds.has(model.id) || 
+                                                                    (currentAgents.some(a => a.model === model.id && a.provider === 'Puter' && !a.isCustom));
+
+
                                                     return (
                                                         <div key={model.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary group">
                                                             <Checkbox
@@ -254,4 +259,3 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
         </>
     );
 }
-
