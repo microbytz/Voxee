@@ -752,7 +752,7 @@ export default function ChatPage() {
         );
     };
 
-    const isThinking = status === 'Thinking...' || status === 'Generating image...';
+    const isThinking = status === 'Thinking...';
 
     return (
         <div className="flex h-screen bg-background text-foreground">
@@ -829,7 +829,7 @@ export default function ChatPage() {
                     <main className="flex-1 flex flex-col h-full">
                         <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
                             <div className="flex items-center gap-2">
-                                <span className="font-bold">Infinity AI</span>
+                                <span className="font-bold">Voxee AI</span>
                                 <Button onClick={handleMinimize} size="icon" variant="ghost" title="Minimize Window">
                                     <Minimize className="h-5 w-5" />
                                 </Button>

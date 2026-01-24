@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Infinity AI Agents",
+  title: "Voxee AI",
   description: "A multi-agent chat application",
 };
 
