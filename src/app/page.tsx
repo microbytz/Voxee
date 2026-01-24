@@ -520,12 +520,22 @@ export default function ChatPage() {
     
     // --- App Launcher ---
     const apps = [
-        { name: 'Google', url: 'https://www.google.com/search?igu=1' },
+        { name: 'Google Search', url: 'https://www.google.com/search?igu=1' },
         { name: 'Google Drive', url: 'https://drive.google.com/' },
         { name: 'Google Sheets', url: 'https://docs.google.com/spreadsheets/' },
         { name: 'Google Docs', url: 'https://docs.google.com/document/' },
         { name: 'Google Slides', url: 'https://docs.google.com/presentation/' },
         { name: 'Google Calendar', url: 'https://calendar.google.com/' },
+        { name: 'YouTube', url: 'https://www.youtube.com/' },
+        { name: 'Wikipedia', url: 'https://www.wikipedia.org/' },
+        { name: 'Trello', url: 'https://trello.com/login' },
+        { name: 'Notion', url: 'https://www.notion.so' },
+        { name: 'Miro', url: 'https://miro.com/login/' },
+        { name: 'Figma', url: 'https://www.figma.com' },
+        { name: 'Canva', url: 'https://www.canva.com' },
+        { name: 'CodePen', url: 'https://codepen.io' },
+        { name: 'Replit', url: 'https://replit.com' },
+        { name: 'WolframAlpha', url: 'https://www.wolframalpha.com' },
     ];
     
     const launchApp = (url: string, name: string) => {
