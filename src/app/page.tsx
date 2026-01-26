@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -22,11 +23,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 
-// Since puter.js is loaded via a script tag, we need to declare it to TypeScript
-declare const puter: any;
-
 // We will load marked.js dynamically, so we'll declare it here.
 declare const marked: any;
+declare const puter: any;
+
 
 interface PuterFile {
     read: () => Promise<string | ArrayBuffer>;
@@ -47,7 +47,7 @@ const CodeBlock = ({ code, lang }: { code: string, lang: string }) => {
 
     const handlePreview = () => {
         try {
-            puter.ui.showHtml(code);
+            window.puter.ui.showHtml(code);
         } catch (error) {
             console.error("Error showing preview:", error);
             alert("Could not display preview. The code may not be valid HTML.");
@@ -227,7 +227,7 @@ export default function ChatPage() {
     const loadSavedChats = React.useCallback(async () => {
         if (!puterUser) return;
         try {
-            const files = await puter.fs.readdir('/');
+            const files = await window.puter.fs.readdir('/');
             const chatFiles = files
                 .filter((f: any) => f.name.startsWith('Chat_') && f.name.endsWith('.json'))
                 .map((f: any) => f.name)
@@ -241,7 +241,7 @@ export default function ChatPage() {
     const handleLoadChat = async (fileName: string) => {
         if (isThinking) return;
         try {
-            const content = await puter.fs.read(fileName);
+            const content = await window.puter.fs.read(fileName);
             if (typeof content === 'string') {
                 const history = JSON.parse(content);
                 setChatHistory(history);
@@ -256,7 +256,7 @@ export default function ChatPage() {
     const handleDeleteChat = async (fileName: string) => {
         if (window.confirm(`Are you sure you want to delete this chat?`)) {
             try {
-                await puter.fs.delete(fileName);
+                await window.puter.fs.delete(fileName);
                 if (currentChatFile === fileName) {
                     startNewChat();
                 }
@@ -286,7 +286,7 @@ export default function ChatPage() {
 
         try {
             setStatus('Syncing...');
-            await puter.fs.write(fileName, JSON.stringify(history, null, 2));
+            await window.puter.fs.write(fileName, JSON.stringify(history, null, 2));
             if (isNewChat) {
                 await loadSavedChats();
             }
@@ -351,7 +351,7 @@ export default function ChatPage() {
                     };
                 });
 
-                const stream = await puter.ai.chat(puterPayload, {
+                const stream = await window.puter.ai.chat(puterPayload, {
                     model: selectedAgent.model,
                     stream: true,
                 });
@@ -404,6 +404,7 @@ export default function ChatPage() {
             } else {
                  // If there was no text response, just update with the user message
                 setChatHistory(newHistoryWithUser);
+                await handleSaveChat(newHistoryWithUser);
             }
 
         } catch (error: any) {
@@ -420,7 +421,7 @@ export default function ChatPage() {
     // --- Attachment Functions ---
     const handleFilePicker = async () => {
         try {
-            const files = await puter.ui.showOpenFilePicker({
+            const files = await window.puter.ui.showOpenFilePicker({
                 multiple: true,
             });
             setAttachedFiles(prev => [...prev, ...files]);
@@ -624,7 +625,7 @@ export default function ChatPage() {
 
     const handleLogin = async () => {
         try {
-            const user = await puter.auth.getUser();
+            const user = await window.puter.auth.getUser();
             setPuterUser(user);
         } catch (error) {
             console.error("Login failed:", error);
@@ -632,8 +633,8 @@ export default function ChatPage() {
     };
 
     const handleMinimize = () => {
-        if (puter && puter.window && typeof puter.window.minimize === 'function') {
-            puter.window.minimize();
+        if (window.puter && window.puter.window && typeof window.puter.window.minimize === 'function') {
+            window.puter.window.minimize();
         } else {
             console.warn("Puter window API not available or not running in Puter environment.");
         }
@@ -743,7 +744,7 @@ export default function ChatPage() {
         
         const handlePuterReady = async () => {
             try {
-                const user = await puter.auth.getUser();
+                const user = await window.puter.auth.getUser();
                 setPuterUser(user);
             } catch (e) {
                 // User is not logged in
@@ -1131,3 +1132,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    

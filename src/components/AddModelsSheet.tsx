@@ -49,7 +49,7 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
                 setIsLoading(true);
                 setError(null);
                 try {
-                    const models = await puter.ai.listModels();
+                    const models = await window.puter.ai.listModels();
                     setAllModels(models);
                     
                     const userAgents = getUserAgents();
@@ -259,3 +259,5 @@ export function AddModelsSheet({ isOpen, onOpenChange, currentAgents, onAgentsUp
         </>
     );
 }
+
+    
