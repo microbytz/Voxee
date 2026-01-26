@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -29,6 +30,9 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  experimental: {
+    allowedDevOrigins: ["https://6000-firebase-studio-1763320527550.cluster-6dx7corvpngoivimwvvljgokdw.cloudworkstations.dev"],
   },
 };
 
