@@ -300,19 +300,20 @@ export default function ChatPage() {
     const handleSend = async () => {
         const userText = userInputRef.current?.value || '';
         if (!userText && !capturedImage && attachedFiles.length === 0) return;
-    
+
         const selectedAgent = agents.find(agent => agent.id === currentAgentId);
         if (!selectedAgent) {
             addMessage('ai', 'Error: Could not find the selected agent configuration.');
             return;
         }
-    
-        // 1. Prepare user message object
+
+        // 1. Prepare user message and update UI
         const currentUserMessage: { role: string; content: any; attachments: any[] } = {
             role: 'user',
             content: userText || 'File(s) attached',
             attachments: []
         };
+
         if (capturedImage) {
             currentUserMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
         }
@@ -320,24 +321,22 @@ export default function ChatPage() {
             const content = await file.read();
             currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
         }
-    
-        // 2. Prepare history for API and update UI
+
         const newHistoryWithUser = [...chatHistory, currentUserMessage];
         const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
         setChatHistory(historyWithPlaceholder);
-    
-        // Reset inputs and set status
+
+        // Reset inputs
         if (userInputRef.current) userInputRef.current.value = '';
         setCapturedImage(null);
         setAttachedFiles([]);
         setStatus('Thinking...');
-    
-        // 3. Process the request
+
+        // 2. Process the request
         let fullResponseText = '';
-        
         try {
             if (selectedAgent.provider === 'Puter') {
-                const puterPayload = newHistoryWithUser.map(msg => {
+                 const puterPayload = newHistoryWithUser.map(msg => {
                     const content: any[] = [{ type: 'text', text: msg.content }];
                     if (msg.attachments) {
                         msg.attachments.forEach(att => {
@@ -351,22 +350,20 @@ export default function ChatPage() {
                         content: content.length === 1 ? content[0].text : content
                     };
                 });
-    
-                const stream = await puter.ai.chat(puterPayload, { 
-                    model: selectedAgent.model, 
+
+                const stream = await puter.ai.chat(puterPayload, {
+                    model: selectedAgent.model,
                     stream: true,
                 });
-    
+
                 for await (const chunk of stream) {
                     let textChunk = '';
                     if (typeof chunk === 'string') {
                         textChunk = chunk;
                     } else if (chunk?.text) {
                         textChunk = chunk.text;
-                    } else if (chunk && chunk.message && typeof chunk.message.content === 'string') {
+                    } else if (chunk?.message?.content) {
                         textChunk = chunk.message.content;
-                    } else if (chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
-                        textChunk = chunk.choices[0].delta.content;
                     }
 
                     if (textChunk) {
@@ -379,7 +376,6 @@ export default function ChatPage() {
                     }
                 }
             } else if (selectedAgent.provider === 'OpenAI' && selectedAgent.isCustom) {
-                // For OpenAI, only send text content
                 const openAiMessages = newHistoryWithUser.map(msg => ({
                     role: msg.role === 'ai' ? 'assistant' : 'user',
                     content: msg.content
@@ -397,19 +393,24 @@ export default function ChatPage() {
                      })
                 });
             } else {
-                throw new Error(`Provider "${selectedAgent.provider}" is not configured for streaming.`);
+                 throw new Error(`Provider "${selectedAgent.provider}" is not configured for streaming.`);
             }
-            
-            // 4. After the stream is complete, save the chat.
+
+            // 3. After stream is complete, update history and save
             if (fullResponseText.trim()) {
-                const finalHistoryToSave = [...newHistoryWithUser, { role: 'ai', content: fullResponseText }];
-                await handleSaveChat(finalHistoryToSave);
+                const finalHistory = [...newHistoryWithUser, { role: 'ai', content: fullResponseText }];
+                setChatHistory(finalHistory);
+                await handleSaveChat(finalHistory);
+            } else {
+                 // If there was no text response, just update with the user message
+                setChatHistory(newHistoryWithUser);
             }
-    
+
         } catch (error: any) {
             console.error("Error from AI:", error);
             const errorMessage = "```json\n" + JSON.stringify({ message: error.message }, null, 2) + "\n```";
-            setChatHistory(prev => [...prev.slice(0, -1), { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }]);
+            const finalHistory = [...newHistoryWithUser, { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }];
+            setChatHistory(finalHistory);
         } finally {
             setStatus('Ready');
         }
@@ -623,7 +624,7 @@ export default function ChatPage() {
 
     const handleLogin = async () => {
         try {
-            const user = await puter.auth();
+            const user = await puter.auth.getUser();
             setPuterUser(user);
         } catch (error) {
             console.error("Login failed:", error);
