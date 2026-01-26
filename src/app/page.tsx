@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -269,129 +268,6 @@ export default function ChatPage() {
         }
     };
 
-    const handleSend = async () => {
-        const userText = userInputRef.current?.value || '';
-        if (!userText && !capturedImage && attachedFiles.length === 0) return;
-    
-        const selectedAgent = agents.find(agent => agent.id === currentAgentId);
-        if (!selectedAgent) {
-            addMessage('ai', 'Error: Could not find the selected agent configuration.');
-            return;
-        }
-    
-        // 1. Prepare history and user message for UI
-        const currentUserMessage: { role: string; content: any; attachments: any[] } = {
-            role: 'user',
-            content: userText || 'File(s) attached',
-            attachments: []
-        };
-        // Add attachments to UI message
-        if (capturedImage) {
-            currentUserMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
-        }
-        for (const file of attachedFiles) {
-            const content = await file.read(); // This could be slow
-            currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
-        }
-    
-        // 2. Update UI immediately with user message and AI placeholder
-        const newHistoryWithUser = [...chatHistory, currentUserMessage];
-        const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
-        setChatHistory(historyWithPlaceholder);
-        if (userInputRef.current) userInputRef.current.value = '';
-        setCapturedImage(null);
-        setAttachedFiles([]);
-        setStatus('Thinking...');
-    
-        // 3. Prepare payload for the AI API
-        const historyForApi = JSON.parse(JSON.stringify(chatHistory));
-        let messagePayload: any[] = [];
-    
-        if (selectedAgent && selectedAgent.systemPrompt) {
-            messagePayload.push({ role: 'system', content: selectedAgent.systemPrompt });
-        }
-        historyForApi.forEach((msg: any) => {
-            messagePayload.push({ role: msg.role === 'ai' ? 'assistant' : 'user', content: msg.content });
-        });
-    
-        let userMessageContentForApi: any[] = [];
-        if (userText) userMessageContentForApi.push({ type: 'text', text: userText });
-        if (capturedImage) userMessageContentForApi.push({ type: 'image', source: { data: capturedImage } });
-        for (const file of attachedFiles) {
-            const content = await file.read();
-            userMessageContentForApi.push({ type: 'text', text: `Attached file: ${file.name}\n\n${content}` });
-        }
-        messagePayload.push({ role: 'user', content: userMessageContentForApi });
-    
-        // 4. Process the request
-        let finalHistory: any[] | null = null;
-        let fullResponseText = '';
-        
-        try {
-            const onChunk = (textChunk: string) => {
-                fullResponseText += textChunk;
-                setChatHistory(prev => {
-                    const newHistory = [...prev.slice(0, -1), { role: 'ai', content: fullResponseText }];
-                    finalHistory = newHistory;
-                    return newHistory;
-                });
-            };
-
-            if (selectedAgent.provider === 'Puter') {
-                const stream = await puter.ai.chat(messagePayload, { 
-                    model: selectedAgent.model, 
-                    max_tokens: 8192,
-                    stream: true,
-                });
-    
-                for await (const chunk of stream) {
-                     let textChunk = '';
-                    if (typeof chunk === 'string') {
-                        textChunk = chunk;
-                    } else if (chunk && typeof chunk.text === 'string') {
-                        textChunk = chunk.text;
-                    } else if (chunk && chunk.message && typeof chunk.message.content === 'string') {
-                        textChunk = chunk.message.content;
-                    } else if (chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
-                        textChunk = chunk.choices[0].delta.content;
-                    }
-                    if (textChunk) onChunk(textChunk);
-                }
-            } else if (selectedAgent.provider === 'OpenAI' && selectedAgent.isCustom) {
-                // OpenAI needs a simpler message format for text-only
-                const openAiMessages = messagePayload
-                    .map((msg: any) => {
-                        let content = '';
-                        if (typeof msg.content === 'string') {
-                            content = msg.content;
-                        } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-                            // For now, just find the first text part for simplicity
-                            content = msg.content.find(p => p.type === 'text')?.text || '[unsupported content]';
-                        } else if (msg.role !== 'system') {
-                            content = msg.content || '';
-                        }
-                        return { role: msg.role, content };
-                    });
-
-                await streamOpenAIChat(openAiMessages, selectedAgent, onChunk);
-
-            } else {
-                throw new Error(`Provider "${selectedAgent.provider}" is not configured for streaming.`);
-            }
-            
-            if (finalHistory) {
-                await handleSaveChat(finalHistory);
-            }
-    
-        } catch (error: any) {
-            console.error("Error from AI:", error);
-            const errorMessage = "```json\n" + JSON.stringify({ message: error.message }, null, 2) + "\n```";
-            setChatHistory(prev => [...prev.slice(0, -1), { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }]);
-        } finally {
-            setStatus('Ready');
-        }
-    };
-
     const handleSaveChat = async (historyToSave?: any[]) => {
         const history = historyToSave || chatHistory;
         if (!puterUser) {
@@ -418,6 +294,124 @@ export default function ChatPage() {
         } catch (error) {
             console.error('Error saving chat:', error);
             setStatus('Error saving');
+        }
+    };
+
+    const handleSend = async () => {
+        const userText = userInputRef.current?.value || '';
+        if (!userText && !capturedImage && attachedFiles.length === 0) return;
+    
+        const selectedAgent = agents.find(agent => agent.id === currentAgentId);
+        if (!selectedAgent) {
+            addMessage('ai', 'Error: Could not find the selected agent configuration.');
+            return;
+        }
+    
+        // 1. Prepare user message object
+        const currentUserMessage: { role: string; content: any; attachments: any[] } = {
+            role: 'user',
+            content: userText || 'File(s) attached',
+            attachments: []
+        };
+        if (capturedImage) {
+            currentUserMessage.attachments.push({ type: 'image/jpeg', data: capturedImage, name: 'capture.jpg' });
+        }
+        for (const file of attachedFiles) {
+            const content = await file.read();
+            currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
+        }
+    
+        // 2. Prepare history for API and update UI
+        const newHistoryWithUser = [...chatHistory, currentUserMessage];
+        const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
+        setChatHistory(historyWithPlaceholder);
+    
+        // Reset inputs and set status
+        if (userInputRef.current) userInputRef.current.value = '';
+        setCapturedImage(null);
+        setAttachedFiles([]);
+        setStatus('Thinking...');
+    
+        // 3. Process the request
+        let fullResponseText = '';
+        
+        try {
+            if (selectedAgent.provider === 'Puter') {
+                const puterPayload = newHistoryWithUser.map(msg => {
+                    const content: any[] = [{ type: 'text', text: msg.content }];
+                    if (msg.attachments) {
+                        msg.attachments.forEach(att => {
+                            if (att.type.startsWith('image/')) {
+                                content.push({ type: 'image', source: { data: att.data } });
+                            }
+                        });
+                    }
+                    return {
+                        role: msg.role === 'ai' ? 'assistant' : 'user',
+                        content: content.length === 1 ? content[0].text : content
+                    };
+                });
+    
+                const stream = await puter.ai.chat(puterPayload, { 
+                    model: selectedAgent.model, 
+                    stream: true,
+                });
+    
+                for await (const chunk of stream) {
+                    let textChunk = '';
+                    if (typeof chunk === 'string') {
+                        textChunk = chunk;
+                    } else if (chunk?.text) {
+                        textChunk = chunk.text;
+                    } else if (chunk && chunk.message && typeof chunk.message.content === 'string') {
+                        textChunk = chunk.message.content;
+                    } else if (chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta && typeof chunk.choices[0].delta.content === 'string') {
+                        textChunk = chunk.choices[0].delta.content;
+                    }
+
+                    if (textChunk) {
+                        fullResponseText += textChunk;
+                        setChatHistory(prev => {
+                            const newHistory = [...prev];
+                            newHistory[newHistory.length - 1] = { role: 'ai', content: fullResponseText };
+                            return newHistory;
+                        });
+                    }
+                }
+            } else if (selectedAgent.provider === 'OpenAI' && selectedAgent.isCustom) {
+                // For OpenAI, only send text content
+                const openAiMessages = newHistoryWithUser.map(msg => ({
+                    role: msg.role === 'ai' ? 'assistant' : 'user',
+                    content: msg.content
+                }));
+                 if (selectedAgent.systemPrompt) {
+                    openAiMessages.unshift({ role: 'system', content: selectedAgent.systemPrompt });
+                }
+    
+                await streamOpenAIChat(openAiMessages, selectedAgent, (textChunk) => {
+                     fullResponseText += textChunk;
+                     setChatHistory(prev => {
+                        const newHistory = [...prev];
+                        newHistory[newHistory.length - 1] = { role: 'ai', content: fullResponseText };
+                        return newHistory;
+                     })
+                });
+            } else {
+                throw new Error(`Provider "${selectedAgent.provider}" is not configured for streaming.`);
+            }
+            
+            // 4. After the stream is complete, save the chat.
+            if (fullResponseText.trim()) {
+                const finalHistoryToSave = [...newHistoryWithUser, { role: 'ai', content: fullResponseText }];
+                await handleSaveChat(finalHistoryToSave);
+            }
+    
+        } catch (error: any) {
+            console.error("Error from AI:", error);
+            const errorMessage = "```json\n" + JSON.stringify({ message: error.message }, null, 2) + "\n```";
+            setChatHistory(prev => [...prev.slice(0, -1), { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }]);
+        } finally {
+            setStatus('Ready');
         }
     };
 
@@ -646,7 +640,7 @@ export default function ChatPage() {
     
     const formatChatName = (fileName: string) => {
         try {
-            const timestamp = fileName.match(/(\\d+)/)?.[0];
+            const timestamp = fileName.match(/(\d+)/)?.[0];
             if (!timestamp) return fileName.replace('Chat_', '').replace('.json', '');
             const date = new Date(parseInt(timestamp));
             // Format to something like: Jul 27, 3:45 PM
