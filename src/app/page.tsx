@@ -271,7 +271,7 @@ export default function ChatPage() {
 
     const handleSaveChat = async (historyToSave?: any[]) => {
         const history = historyToSave || chatHistory;
-        if (!puterUser) {
+        if (!puterUser || !isPuterReady) {
              return; // Don't show alert, just don't save.
         }
         if (!history || history.length <= 1) return;
@@ -305,6 +305,12 @@ export default function ChatPage() {
         const selectedAgent = agents.find(agent => agent.id === currentAgentId);
         if (!selectedAgent) {
             addMessage('ai', 'Error: Could not find the selected agent configuration.');
+            return;
+        }
+        
+        if (selectedAgent.provider === 'Puter' && !isPuterReady) {
+            setStatus('Puter is initializing...');
+            setTimeout(() => setStatus('Ready'), 3000);
             return;
         }
 
@@ -844,7 +850,9 @@ export default function ChatPage() {
     };
 
     const isThinking = status === 'Thinking...';
-    const isInputAreaDisabled = isThinking || !isPuterReady;
+    const currentAgent = agents.find(a => a.id === currentAgentId);
+    const isPuterAgentSelected = currentAgent?.provider === 'Puter';
+    const isInputAreaDisabled = isThinking || (isPuterAgentSelected && !isPuterReady);
 
     return (
         <div className="flex h-screen bg-background text-foreground">
@@ -1106,7 +1114,7 @@ export default function ChatPage() {
                                     <Button onClick={handleToggleListening} size="icon" variant="ghost" title="Use Microphone" disabled={isInputAreaDisabled}>
                                         <Mic className={`h-5 w-5 ${isListening ? 'text-primary' : ''}`} />
                                     </Button>
-                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isInputAreaDisabled}>
+                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isInputAreaDisabled || !isPuterReady}>
                                         <Paperclip className="h-5 w-5" />
                                     </Button>
                                     <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera" disabled={isInputAreaDisabled}>
@@ -1136,6 +1144,8 @@ export default function ChatPage() {
         </div>
     );
 }
+
+    
 
     
 
