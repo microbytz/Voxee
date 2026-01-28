@@ -308,12 +308,6 @@ export default function ChatPage() {
             return;
         }
         
-        if (selectedAgent.provider === 'Puter' && !isPuterReady) {
-            setStatus('Puter is initializing...');
-            setTimeout(() => setStatus('Ready'), 3000);
-            return;
-        }
-
         // 1. Prepare user message and update UI
         const currentUserMessage: { role: string; content: any; attachments: any[] } = {
             role: 'user',
@@ -850,9 +844,7 @@ export default function ChatPage() {
     };
 
     const isThinking = status === 'Thinking...';
-    const currentAgent = agents.find(a => a.id === currentAgentId);
-    const isPuterAgentSelected = currentAgent?.provider === 'Puter';
-    const isInputAreaDisabled = isThinking || (isPuterAgentSelected && !isPuterReady);
+    const isInputAreaDisabled = isThinking;
 
     return (
         <div className="flex h-screen bg-background text-foreground">
@@ -862,7 +854,7 @@ export default function ChatPage() {
                          <div className="flex-1 p-2 overflow-y-auto">
                             <div className="flex items-center justify-between mb-2">
                                 <h2 className="text-lg font-semibold px-2">Saved Chats</h2>
-                                <Button variant="ghost" size="icon" onClick={loadSavedChats} title="Refresh Chats" disabled={!isPuterReady}>
+                                <Button variant="ghost" size="icon" onClick={loadSavedChats} title="Refresh Chats">
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                             </div>
@@ -907,7 +899,6 @@ export default function ChatPage() {
                                             variant="outline"
                                             className="w-full"
                                             onClick={handleLogin}
-                                            disabled={!isPuterReady}
                                         >
                                             {isPuterReady ? 'Log In to Puter' : 'Puter OS Initializing...'}
                                         </Button>
@@ -916,7 +907,7 @@ export default function ChatPage() {
                             </ScrollArea>
                         </div>
                         <div className="p-2 border-t border-border space-y-2">
-                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking || !puterUser || !isPuterReady}>
+                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking || !puterUser}>
                                 Save Current Chat
                             </Button>
                             <Button className="w-full" onClick={startNewChat} disabled={isThinking}>
@@ -931,10 +922,10 @@ export default function ChatPage() {
                         <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
                             <div className="flex items-center gap-2">
                                 <span className="font-bold">Voxee AI</span>
-                                <Button onClick={handleMinimize} size="icon" variant="ghost" title="Minimize Window" disabled={!isPuterReady}>
+                                <Button onClick={handleMinimize} size="icon" variant="ghost" title="Minimize Window">
                                     <Minimize className="h-5 w-5" />
                                 </Button>
-                                 <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models" disabled={!isPuterReady}>
+                                 <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models">
                                     <PlusCircle className="h-5 w-5" />
                                 </Button>
                                 <Button onClick={() => setIsAddApiKeySheetOpen(true)} size="icon" variant="ghost" title="Add Custom Agent via API Key">
@@ -1114,7 +1105,7 @@ export default function ChatPage() {
                                     <Button onClick={handleToggleListening} size="icon" variant="ghost" title="Use Microphone" disabled={isInputAreaDisabled}>
                                         <Mic className={`h-5 w-5 ${isListening ? 'text-primary' : ''}`} />
                                     </Button>
-                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isInputAreaDisabled || !isPuterReady}>
+                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isInputAreaDisabled}>
                                         <Paperclip className="h-5 w-5" />
                                     </Button>
                                     <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera" disabled={isInputAreaDisabled}>
