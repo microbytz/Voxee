@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import Draggable from 'react-draggable';
 
-import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, Minimize, Mic, Trash, RefreshCw, KeyRound } from 'lucide-react';
+import { Send, Bot, User, Camera, Paperclip, X, SwitchCamera, Pen, Eraser, File as FileIcon, Clipboard, Volume2, VolumeX, Play, PlusCircle, AppWindow, Minimize, Mic, Trash, RefreshCw, KeyRound, Settings } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DEFAULT_AGENTS, Agent } from '@/lib/agents';
@@ -21,6 +21,7 @@ import { AddApiKeySheet } from '@/components/AddApiKeySheet';
 import { getUserAgents, saveUserAgents } from '@/lib/user-agents';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { SettingsSheet } from '@/components/SettingsSheet';
 
 
 // We will load marked.js dynamically, so we'll declare it here.
@@ -169,6 +170,11 @@ export default function ChatPage() {
 
     // TTS State
     const [speakingMessageIndex, setSpeakingMessageIndex] = React.useState<number | null>(null);
+    const [speechSettings, setSpeechSettings] = React.useState({
+        voiceURI: 'default',
+        rate: 1,
+        pitch: 1,
+    });
 
     // Voice Input State
     const [isListening, setIsListening] = React.useState(false);
@@ -178,6 +184,7 @@ export default function ChatPage() {
     // Add Models Sheet state
     const [isAddModelsSheetOpen, setIsAddModelsSheetOpen] = React.useState(false);
     const [isAddApiKeySheetOpen, setIsAddApiKeySheetOpen] = React.useState(false);
+    const [isSettingsSheetOpen, setIsSettingsSheetOpen] = React.useState(false);
     
     // App Launcher State
     const [appLauncherState, setAppLauncherState] = React.useState<{isOpen: boolean; url: string; name: string} | null>(null);
@@ -240,7 +247,7 @@ export default function ChatPage() {
     }, [puterUser]);
 
     const handleLoadChat = async (fileName: string) => {
-        if (isThinking) return;
+        if (status === 'Thinking...') return;
         try {
             const content = await window.puter.fs.read(fileName);
             if (typeof content === 'string') {
@@ -271,7 +278,7 @@ export default function ChatPage() {
 
     const handleSaveChat = async (historyToSave?: any[]) => {
         const history = historyToSave || chatHistory;
-        if (!puterUser || !isPuterReady) {
+        if (!puterUser || !window.puter) {
              return; // Don't show alert, just don't save.
         }
         if (!history || history.length <= 1) return;
@@ -322,9 +329,10 @@ export default function ChatPage() {
             const content = await file.read();
             currentUserMessage.attachments.push({ type: file.type, data: content, name: file.name });
         }
-
+        
         const newHistoryWithUser = [...chatHistory, currentUserMessage];
         const historyWithPlaceholder = [...newHistoryWithUser, { role: 'ai', content: '' }];
+        
         setChatHistory(historyWithPlaceholder);
 
         // Reset inputs
@@ -396,25 +404,16 @@ export default function ChatPage() {
             } else {
                  throw new Error(`Provider "${selectedAgent.provider}" is not configured for streaming.`);
             }
-
-            // 3. After stream is complete, update history and save
-            if (fullResponseText.trim()) {
-                const finalHistory = [...newHistoryWithUser, { role: 'ai', content: fullResponseText }];
-                setChatHistory(finalHistory);
-                await handleSaveChat(finalHistory);
-            } else {
-                 // If there was no text response, just update with the user message
-                setChatHistory(newHistoryWithUser);
-                await handleSaveChat(newHistoryWithUser);
-            }
-
         } catch (error: any) {
             console.error("Error from AI:", error);
             const errorMessage = "```json\n" + JSON.stringify({ message: error.message }, null, 2) + "\n```";
-            const finalHistory = [...newHistoryWithUser, { role: 'ai', content: 'Sorry, I encountered an error: ' + errorMessage }];
-            setChatHistory(finalHistory);
+            fullResponseText = 'Sorry, I encountered an error: ' + errorMessage;
         } finally {
-            setStatus('Ready');
+             // 3. After stream is complete, update history and save
+             const finalHistory = [...newHistoryWithUser, { role: 'ai', content: fullResponseText.trim() || "Sorry, I couldn't generate a response." }];
+             setChatHistory(finalHistory);
+             await handleSaveChat(finalHistory);
+             setStatus('Ready');
         }
     };
 
@@ -525,6 +524,18 @@ export default function ChatPage() {
         } else {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
+
+            // Find and apply the selected voice, rate, and pitch
+            if (speechSettings.voiceURI !== 'default') {
+                const voices = window.speechSynthesis.getVoices();
+                const selectedVoice = voices.find(v => v.voiceURI === speechSettings.voiceURI);
+                if (selectedVoice) {
+                    utterance.voice = selectedVoice;
+                }
+            }
+            utterance.rate = speechSettings.rate;
+            utterance.pitch = speechSettings.pitch;
+
             utterance.onend = () => {
                 setSpeakingMessageIndex(null);
             };
@@ -743,6 +754,15 @@ export default function ChatPage() {
         const userAgents = getUserAgents();
         setAgents([...DEFAULT_AGENTS, ...userAgents]);
         
+        const savedSettings = localStorage.getItem('speech_settings');
+        if (savedSettings) {
+            try {
+                setSpeechSettings(JSON.parse(savedSettings));
+            } catch (e) {
+                console.error("Failed to parse speech settings from localStorage", e);
+            }
+        }
+
         const handlePuterReady = async () => {
             setIsPuterReady(true);
             try {
@@ -844,7 +864,6 @@ export default function ChatPage() {
     };
 
     const isThinking = status === 'Thinking...';
-    const isInputAreaDisabled = isThinking;
 
     return (
         <div className="flex h-screen bg-background text-foreground">
@@ -907,10 +926,10 @@ export default function ChatPage() {
                             </ScrollArea>
                         </div>
                         <div className="p-2 border-t border-border space-y-2">
-                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={isThinking || !puterUser}>
+                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={!puterUser}>
                                 Save Current Chat
                             </Button>
-                            <Button className="w-full" onClick={startNewChat} disabled={isThinking}>
+                            <Button className="w-full" onClick={startNewChat}>
                                 New Chat
                             </Button>
                         </div>
@@ -930,6 +949,9 @@ export default function ChatPage() {
                                 </Button>
                                 <Button onClick={() => setIsAddApiKeySheetOpen(true)} size="icon" variant="ghost" title="Add Custom Agent via API Key">
                                     <KeyRound className="h-5 w-5" />
+                                </Button>
+                                <Button onClick={() => setIsSettingsSheetOpen(true)} size="icon" variant="ghost" title="Voice Settings">
+                                    <Settings className="h-5 w-5" />
                                 </Button>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -975,7 +997,7 @@ export default function ChatPage() {
                                         {msg.attachments?.map((att: any, i: number) => (
                                             <AttachmentPreview key={i} attachment={att} />
                                         ))}
-                                        {msg.role === 'ai' && typeof msg.content === 'string' && msg.content && (
+                                        {msg.role === 'ai' && typeof msg.content === 'string' && msg.content && !msg.content.startsWith('Sorry, I encountered an error:') && (
                                             <Button
                                                 size="icon"
                                                 variant="ghost"
@@ -1099,19 +1121,19 @@ export default function ChatPage() {
                                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                                     className="pr-32 pl-4"
                                     style={{paddingLeft: `${(capturedImage ? 80 : 0) + attachedFiles.reduce((acc, file) => acc + Math.min(100, file.name.length * 7) + 40, 5)}px`}}
-                                    disabled={isInputAreaDisabled}
+                                    disabled={isThinking}
                                 />
                                 <div className="absolute inset-y-0 right-2 flex items-center">
-                                    <Button onClick={handleToggleListening} size="icon" variant="ghost" title="Use Microphone" disabled={isInputAreaDisabled}>
+                                    <Button onClick={handleToggleListening} size="icon" variant="ghost" title="Use Microphone" disabled={isThinking}>
                                         <Mic className={`h-5 w-5 ${isListening ? 'text-primary' : ''}`} />
                                     </Button>
-                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isInputAreaDisabled}>
+                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isThinking}>
                                         <Paperclip className="h-5 w-5" />
                                     </Button>
-                                    <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera" disabled={isInputAreaDisabled}>
+                                    <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera" disabled={isThinking}>
                                         <Camera className="h-5 w-5" />
                                     </Button>
-                                    <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message" disabled={isInputAreaDisabled}>
+                                    <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message" disabled={isThinking}>
                                         <Send className="h-5 w-5" />
                                     </Button>
                                 </div>
@@ -1132,12 +1154,12 @@ export default function ChatPage() {
                 onOpenChange={setIsAddApiKeySheetOpen}
                 onAgentsUpdated={handleAgentsUpdated}
             />
+            <SettingsSheet
+                isOpen={isSettingsSheetOpen}
+                onOpenChange={setIsSettingsSheetOpen}
+                settings={speechSettings}
+                onSettingsChange={setSpeechSettings}
+            />
         </div>
     );
 }
-
-    
-
-    
-
-    

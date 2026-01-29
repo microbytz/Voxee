@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,6 +22,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={cn(inter.className, "bg-background text-foreground")}>
         {children}
+        <Toaster />
         <Script src="https://js.puter.com/v2/" strategy="afterInteractive" />
       </body>
     </html>
