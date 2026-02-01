@@ -3,10 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-      "dev": "next dev",
-        "build": "next build",
-          "pages:build": "npx @cloudflare/next-on-pages"
-          }     
+    "dev": "next dev",
+    "build": "next build",
+    "pages:build": "npx @cloudflare/next-on-pages"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.0",
