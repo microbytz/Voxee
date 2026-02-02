@@ -1,6 +1,10 @@
 {
   "name": "voxee",
-  "compatibility_date": "2026-01-31",
+  "compatibility_date": "2026-02-01",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": ".vercel/output"
+  "main": ".vercel/output/static/_worker.js/index.js",
+  "assets": {
+    "directory": ".vercel/output/static",
+    "binding": "ASSETS"
+  }
 }
