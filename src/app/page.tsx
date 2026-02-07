@@ -1,5 +1,6 @@
-
 'use client';
+
+export const runtime = 'edge';
 
 import React from 'react';
 import parse, { domToReact, HTMLReactParserOptions, Element } from 'html-react-parser';
@@ -864,6 +865,8 @@ export default function ChatPage() {
     };
 
     const isThinking = status === 'Thinking...';
+    const selectedAgent = agents.find(a => a.id === currentAgentId);
+    const isPuterAgentSelected = selectedAgent?.provider === 'Puter';
 
     return (
         <div className="flex h-screen bg-background text-foreground">
@@ -873,7 +876,7 @@ export default function ChatPage() {
                          <div className="flex-1 p-2 overflow-y-auto">
                             <div className="flex items-center justify-between mb-2">
                                 <h2 className="text-lg font-semibold px-2">Saved Chats</h2>
-                                <Button variant="ghost" size="icon" onClick={loadSavedChats} title="Refresh Chats">
+                                <Button variant="ghost" size="icon" onClick={loadSavedChats} title="Refresh Chats" disabled={!isPuterReady}>
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                             </div>
@@ -889,6 +892,7 @@ export default function ChatPage() {
                                                     onClick={() => handleLoadChat(fileName)}
                                                     className="flex-1 text-left truncate text-sm"
                                                     title={fileName}
+                                                    disabled={!isPuterReady}
                                                 >
                                                     {formatChatName(fileName)}
                                                 </button>
@@ -900,6 +904,7 @@ export default function ChatPage() {
                                                         e.stopPropagation();
                                                         handleDeleteChat(fileName);
                                                     }}
+                                                    disabled={!isPuterReady}
                                                 >
                                                     <Trash className="h-4 w-4 text-destructive/70 hover:text-destructive" />
                                                 </Button>
@@ -918,6 +923,7 @@ export default function ChatPage() {
                                             variant="outline"
                                             className="w-full"
                                             onClick={handleLogin}
+                                            disabled={!isPuterReady}
                                         >
                                             {isPuterReady ? 'Log In to Puter' : 'Puter OS Initializing...'}
                                         </Button>
@@ -926,7 +932,7 @@ export default function ChatPage() {
                             </ScrollArea>
                         </div>
                         <div className="p-2 border-t border-border space-y-2">
-                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={!puterUser}>
+                             <Button className="w-full" variant="outline" onClick={() => handleSaveChat()} disabled={!puterUser || !isPuterReady}>
                                 Save Current Chat
                             </Button>
                             <Button className="w-full" onClick={startNewChat}>
@@ -941,10 +947,10 @@ export default function ChatPage() {
                         <header className="flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur-sm">
                             <div className="flex items-center gap-2">
                                 <span className="font-bold">Voxee AI</span>
-                                <Button onClick={handleMinimize} size="icon" variant="ghost" title="Minimize Window">
+                                <Button onClick={handleMinimize} size="icon" variant="ghost" title="Minimize Window" disabled={!isPuterReady}>
                                     <Minimize className="h-5 w-5" />
                                 </Button>
-                                 <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models">
+                                 <Button onClick={() => setIsAddModelsSheetOpen(true)} size="icon" variant="ghost" title="Add/Remove Models" disabled={!isPuterReady}>
                                     <PlusCircle className="h-5 w-5" />
                                 </Button>
                                 <Button onClick={() => setIsAddApiKeySheetOpen(true)} size="icon" variant="ghost" title="Add Custom Agent via API Key">
@@ -955,7 +961,7 @@ export default function ChatPage() {
                                 </Button>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button size="icon" variant="ghost" title="Launch App">
+                                        <Button size="icon" variant="ghost" title="Launch App" disabled={!isPuterReady}>
                                             <AppWindow className="h-5 w-5" />
                                         </Button>
                                     </DropdownMenuTrigger>
@@ -1121,19 +1127,19 @@ export default function ChatPage() {
                                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
                                     className="pr-32 pl-4"
                                     style={{paddingLeft: `${(capturedImage ? 80 : 0) + attachedFiles.reduce((acc, file) => acc + Math.min(100, file.name.length * 7) + 40, 5)}px`}}
-                                    disabled={isThinking}
+                                    disabled={isThinking || (isPuterAgentSelected && !isPuterReady)}
                                 />
                                 <div className="absolute inset-y-0 right-2 flex items-center">
                                     <Button onClick={handleToggleListening} size="icon" variant="ghost" title="Use Microphone" disabled={isThinking}>
                                         <Mic className={`h-5 w-5 ${isListening ? 'text-primary' : ''}`} />
                                     </Button>
-                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isThinking}>
+                                    <Button onClick={handleFilePicker} size="icon" variant="ghost" title="Attach Files" disabled={isThinking || !isPuterReady}>
                                         <Paperclip className="h-5 w-5" />
                                     </Button>
                                     <Button onClick={handleCameraClick} size="icon" variant="ghost" title="Use Camera" disabled={isThinking}>
                                         <Camera className="h-5 w-5" />
                                     </Button>
-                                    <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message" disabled={isThinking}>
+                                    <Button onClick={() => handleSend()} size="icon" variant="ghost" title="Send Message" disabled={isThinking || (isPuterAgentSelected && !isPuterReady)}>
                                         <Send className="h-5 w-5" />
                                     </Button>
                                 </div>
